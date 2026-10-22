@@ -25,12 +25,17 @@ function CheckoutContent() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
 
-  const tourId = searchParams.get("tourId") || "";
+  const slugParam = searchParams.get("slug");
+  const tourIdParam = searchParams.get("tourId");
+  const idParam = searchParams.get("id");
+  const tourIdentifier = slugParam || tourIdParam || idParam || "";
   const departureDate = searchParams.get("date") || "2026-06-15";
   const travelersCount = Number(searchParams.get("travelers")) || 2;
 
   const [tour, setTour] = useState<Tour | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorType, setErrorType] = useState<"not_found" | "server_error" | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string>("");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
@@ -56,27 +61,63 @@ function CheckoutContent() {
     }
   }, [user]);
 
-  useEffect(() => {
-    // Fetch tour info
-    if (tourId) {
-      fetch(`/api/tours/${tourId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.status === "success") {
+  const loadTour = () => {
+    setIsLoading(true);
+    setErrorType(null);
+    setErrorDetails("");
+
+    if (tourIdentifier) {
+      fetch(`/api/tours/${encodeURIComponent(tourIdentifier)}`)
+        .then(async (res) => {
+          if (res.status === 404) {
+            setErrorType("not_found");
+            setTour(null);
+            return;
+          }
+          if (!res.ok) {
+            setErrorType("server_error");
+            setErrorDetails("Unable to retrieve tour details from the server.");
+            setTour(null);
+            return;
+          }
+          const data = await res.json();
+          if (data?.status === "success" && data.data?.tour) {
             setTour(data.data.tour);
+          } else {
+            setErrorType("not_found");
+            setTour(null);
           }
         })
-        .catch((err) => console.error("Error fetching tour:", err))
+        .catch((err) => {
+          console.error("Error fetching tour for checkout:", err);
+          setErrorType("server_error");
+          setErrorDetails("Network connectivity issue. Please check your internet connection and try again.");
+          setTour(null);
+        })
         .finally(() => setIsLoading(false));
     } else {
       fetch(`/api/tours?limit=1`)
         .then((res) => res.json())
         .then((data) => {
-          if (data?.data?.[0]) setTour(data.data[0]);
+          if (data?.data?.[0]) {
+            setTour(data.data[0]);
+          } else {
+            setErrorType("not_found");
+            setTour(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching fallback tour:", err);
+          setErrorType("server_error");
+          setTour(null);
         })
         .finally(() => setIsLoading(false));
     }
-  }, [tourId]);
+  };
+
+  useEffect(() => {
+    loadTour();
+  }, [tourIdentifier]);
 
   // Open confirmation modal
   const handleOpenConfirmModal = (e: React.FormEvent) => {
@@ -106,7 +147,7 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tourId: tour?._id || tourId,
+          tourId: tour?._id || tourIdentifier,
           departureDate,
           travelers: travelersCount,
           guestName: guestName.trim(),
@@ -151,14 +192,47 @@ function CheckoutContent() {
     );
   }
 
+  if (errorType === "server_error") {
+    return (
+      <div className="max-w-xl mx-auto py-24 px-4 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="font-serif text-2xl font-bold text-[#1c2421]">Unable to Retrieve Expedition</h2>
+        <p className="text-xs text-stone-600 max-w-md mx-auto">
+          {errorDetails || "We encountered a temporary connection issue while retrieving this itinerary."}
+        </p>
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            onClick={loadTour}
+            className="px-5 py-2.5 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl text-xs font-semibold transition-colors"
+          >
+            Retry Expedition Lookup
+          </button>
+          <Link
+            href="/tours"
+            className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-semibold transition-colors"
+          >
+            Browse Expeditions
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!tour) {
     return (
       <div className="max-w-xl mx-auto py-24 px-4 text-center space-y-4">
-        <h2 className="font-serif text-2xl font-bold">Expedition Not Found</h2>
-        <p className="text-xs text-stone-600">Please choose a tour from our exploration directory.</p>
+        <div className="w-12 h-12 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="font-serif text-2xl font-bold text-[#1c2421]">Expedition Not Found</h2>
+        <p className="text-xs text-stone-600 max-w-md mx-auto">
+          The requested tour does not exist, has been archived, or the link is invalid. Please select a valid tour from our exploration directory.
+        </p>
         <Link
           href="/tours"
-          className="inline-block px-5 py-2.5 bg-[#124e3f] text-white rounded-xl text-xs font-semibold"
+          className="inline-block px-5 py-2.5 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl text-xs font-semibold transition-colors"
         >
           Browse Expeditions
         </Link>
@@ -307,7 +381,9 @@ function CheckoutContent() {
               </div>
             </div>
             <Link
-              href={`/login?redirect=/checkout?tourId=${tour._id || tour.slug}&date=${departureDate}&travelers=${travelersCount}`}
+              href={`/login?redirect=${encodeURIComponent(
+                `/checkout?slug=${tour.slug || ""}&tourId=${tour._id || ""}&date=${departureDate}&travelers=${travelersCount}`
+              )}`}
               className="px-4 py-2 bg-[#124e3f] text-white rounded-xl text-xs font-semibold hover:bg-[#0c382d] text-center shrink-0"
             >
               Sign In to Book

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db/mongodb";
 import { Tour as TourModel } from "@/models/Tour";
 import { TourDeparture as TourDepartureModel } from "@/models/TourDeparture";
@@ -165,11 +166,30 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
   };
 }
 
-export async function getTourBySlug(slug: string): Promise<Tour | null> {
+export async function getTourBySlug(slugOrId: string): Promise<Tour | null> {
+  if (!slugOrId) return null;
+  const decoded = decodeURIComponent(slugOrId).trim();
+  const isMongoId = /^[0-9a-fA-F]{24}$/.test(decoded);
+
   const db = await connectToDatabase();
   if (db) {
     try {
-      const tour = await TourModel.findOne({ slug }).lean();
+      let tour = null;
+      if (isMongoId) {
+        tour = await TourModel.findById(decoded).lean();
+        if (!tour) {
+          tour = await TourModel.findOne({ slug: decoded }).lean();
+        }
+      } else {
+        tour = await TourModel.findOne({ slug: decoded }).lean();
+        if (!tour) {
+          // Case-insensitive fallback
+          tour = await TourModel.findOne({
+            slug: { $regex: new RegExp(`^${decoded}$`, "i") },
+          }).lean();
+        }
+      }
+
       if (tour) {
         return JSON.parse(JSON.stringify(tour));
       }
@@ -178,56 +198,141 @@ export async function getTourBySlug(slug: string): Promise<Tour | null> {
     }
   }
 
-  const sample = SAMPLE_TOURS.find((t) => t.slug === slug);
+  const allFallbackTours = [...SAMPLE_TOURS, ...INDIAN_TOURS];
+  const sample = allFallbackTours.find(
+    (t) =>
+      t.slug === decoded ||
+      t.slug.toLowerCase() === decoded.toLowerCase() ||
+      t._id === decoded ||
+      (t as { id?: string }).id === decoded
+  );
   return sample || null;
 }
 
 export async function getTourDepartures(tourIdOrSlug: string): Promise<TourDeparture[]> {
+  if (!tourIdOrSlug) return [];
+  const decoded = decodeURIComponent(tourIdOrSlug).trim();
+  const isMongoId = /^[0-9a-fA-F]{24}$/.test(decoded);
+
   const db = await connectToDatabase();
   if (db) {
     try {
-      // Find tour first if slug passed
-      let tourObjId = tourIdOrSlug;
-      if (!tourIdOrSlug.match(/^[0-9a-fA-F]{24}$/)) {
-        const found = await TourModel.findOne({ slug: tourIdOrSlug }).select("_id").lean();
+      let tourObjId = decoded;
+      if (!isMongoId) {
+        const found = await TourModel.findOne({
+          $or: [
+            { slug: decoded },
+            { slug: { $regex: new RegExp(`^${decoded}$`, "i") } },
+          ],
+        }).select("_id").lean();
         if (found) tourObjId = (found._id as object).toString();
       }
-      const departures = await TourDepartureModel.find({ tour: tourObjId }).sort({ startDate: 1 }).lean();
-      if (departures.length > 0) {
-        return JSON.parse(JSON.stringify(departures));
+
+      if (/^[0-9a-fA-F]{24}$/.test(tourObjId)) {
+        const departures = await TourDepartureModel.find({
+          tour: new mongoose.Types.ObjectId(tourObjId),
+        }).sort({ startDate: 1 }).lean();
+        if (departures.length > 0) {
+          return JSON.parse(JSON.stringify(departures));
+        }
       }
     } catch (err) {
       console.warn("DB departures fallback:", err);
     }
   }
 
-  const tour = SAMPLE_TOURS.find((t) => t.slug === tourIdOrSlug || t._id === tourIdOrSlug);
+  const allFallbackTours = [...SAMPLE_TOURS, ...INDIAN_TOURS];
+  const tour = allFallbackTours.find(
+    (t) =>
+      t.slug === decoded ||
+      t.slug.toLowerCase() === decoded.toLowerCase() ||
+      t._id === decoded ||
+      (t as { id?: string }).id === decoded
+  );
   if (!tour) return [];
-  return SAMPLE_DEPARTURES.filter((d) => d.tour === tour._id);
+
+  const sampleDeps = SAMPLE_DEPARTURES.filter(
+    (d) => d.tour === tour._id || d.tour === (tour as { id?: string }).id
+  );
+  if (sampleDeps.length > 0) return sampleDeps;
+
+  // Realistic future departures for tours without stored departures
+  return [
+    {
+      _id: `dep-${tour._id}-1`,
+      tour: tour._id,
+      startDate: "2026-06-15",
+      endDate: "2026-06-22",
+      capacity: tour.maxGroupSize || 12,
+      reservedSeats: 4,
+      status: "open",
+    },
+    {
+      _id: `dep-${tour._id}-2`,
+      tour: tour._id,
+      startDate: "2026-07-10",
+      endDate: "2026-07-17",
+      capacity: tour.maxGroupSize || 12,
+      reservedSeats: 7,
+      status: "open",
+    },
+    {
+      _id: `dep-${tour._id}-3`,
+      tour: tour._id,
+      startDate: "2026-08-05",
+      endDate: "2026-08-12",
+      capacity: tour.maxGroupSize || 12,
+      reservedSeats: 2,
+      status: "open",
+    },
+  ];
 }
 
 export async function getTourReviews(tourIdOrSlug: string): Promise<Review[]> {
+  if (!tourIdOrSlug) return [];
+  const decoded = decodeURIComponent(tourIdOrSlug).trim();
+  const isMongoId = /^[0-9a-fA-F]{24}$/.test(decoded);
+
   const db = await connectToDatabase();
   if (db) {
     try {
-      let tourObjId = tourIdOrSlug;
-      if (!tourIdOrSlug.match(/^[0-9a-fA-F]{24}$/)) {
-        const found = await TourModel.findOne({ slug: tourIdOrSlug }).select("_id").lean();
+      let tourObjId = decoded;
+      if (!isMongoId) {
+        const found = await TourModel.findOne({
+          $or: [
+            { slug: decoded },
+            { slug: { $regex: new RegExp(`^${decoded}$`, "i") } },
+          ],
+        }).select("_id").lean();
         if (found) tourObjId = (found._id as object).toString();
       }
-      const reviews = await ReviewModel.find({ tour: tourObjId })
-        .populate("user", "name photo")
-        .sort({ createdAt: -1 })
-        .lean();
-      if (reviews.length > 0) {
-        return JSON.parse(JSON.stringify(reviews));
+
+      if (/^[0-9a-fA-F]{24}$/.test(tourObjId)) {
+        const reviews = await ReviewModel.find({
+          tour: new mongoose.Types.ObjectId(tourObjId),
+        })
+          .populate("user", "name photo")
+          .sort({ createdAt: -1 })
+          .lean();
+        if (reviews.length > 0) {
+          return JSON.parse(JSON.stringify(reviews));
+        }
       }
     } catch (err) {
       console.warn("DB reviews fallback:", err);
     }
   }
 
-  const tour = SAMPLE_TOURS.find((t) => t.slug === tourIdOrSlug || t._id === tourIdOrSlug);
+  const allFallbackTours = [...SAMPLE_TOURS, ...INDIAN_TOURS];
+  const tour = allFallbackTours.find(
+    (t) =>
+      t.slug === decoded ||
+      t.slug.toLowerCase() === decoded.toLowerCase() ||
+      t._id === decoded ||
+      (t as { id?: string }).id === decoded
+  );
   if (!tour) return [];
-  return SAMPLE_REVIEWS.filter((r) => r.tour === tour._id);
+  return SAMPLE_REVIEWS.filter(
+    (r) => r.tour === tour._id || r.tour === (tour as { id?: string }).id
+  );
 }

@@ -6,6 +6,7 @@ import { Booking as BookingModel } from "@/models/Booking";
 import { User as UserModel } from "@/models/User";
 import { TourDeparture as TourDepartureModel } from "@/models/TourDeparture";
 import { SAMPLE_TOURS } from "@/lib/data/sample-tours";
+import { INDIAN_TOURS } from "@/lib/data/indian-tours";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -108,17 +109,30 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Find the tour
+      // Find and validate the tour
+      const cleanedTourId = decodeURIComponent(tourId).trim();
       let tour = null;
-      if (tourId.match(/^[0-9a-fA-F]{24}$/)) {
-        tour = await TourModel.findById(tourId);
+      if (cleanedTourId.match(/^[0-9a-fA-F]{24}$/)) {
+        tour = await TourModel.findById(cleanedTourId);
       }
       if (!tour) {
-        tour = await TourModel.findOne({ slug: tourId });
+        tour = await TourModel.findOne({ slug: cleanedTourId });
+      }
+      if (!tour) {
+        tour = await TourModel.findOne({
+          slug: { $regex: new RegExp(`^${cleanedTourId}$`, "i") },
+        });
       }
 
       if (!tour) {
         return NextResponse.json({ status: "error", message: "Expedition tour not found" }, { status: 404 });
+      }
+
+      if (tour.isPublished === false) {
+        return NextResponse.json(
+          { status: "error", message: "This expedition is not currently published for reservations." },
+          { status: 400 }
+        );
       }
 
       // Check group size limit
@@ -221,8 +235,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Development demo fallback
+    const allFallbackTours = [...SAMPLE_TOURS, ...INDIAN_TOURS];
+    const cleanedTourId = decodeURIComponent(tourId).trim();
     const matchedTour =
-      SAMPLE_TOURS.find((t) => t._id === tourId || t.slug === tourId) || SAMPLE_TOURS[0];
+      allFallbackTours.find(
+        (t) =>
+          t._id === cleanedTourId ||
+          t.slug === cleanedTourId ||
+          (t as { id?: string }).id === cleanedTourId ||
+          t.slug.toLowerCase() === cleanedTourId.toLowerCase()
+      ) || allFallbackTours[0];
     const pricePerTraveler = matchedTour.price;
     const totalPrice = pricePerTraveler * travelers;
 

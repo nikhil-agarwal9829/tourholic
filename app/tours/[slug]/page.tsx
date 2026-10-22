@@ -26,7 +26,8 @@ interface TourDetailPageProps {
 
 export async function generateMetadata({ params }: TourDetailPageProps) {
   const { slug } = await params;
-  const tour = await getTourBySlug(slug);
+  const decodedSlug = decodeURIComponent(slug).trim();
+  const tour = await getTourBySlug(decodedSlug);
   if (!tour) return { title: "Tour Not Found — Touroholic" };
   return {
     title: `${tour.name} — Touroholic Expeditions`,
@@ -36,15 +37,16 @@ export async function generateMetadata({ params }: TourDetailPageProps) {
 
 export default async function TourDetailPage({ params }: TourDetailPageProps) {
   const { slug } = await params;
-  const tour = await getTourBySlug(slug);
+  const decodedSlug = decodeURIComponent(slug).trim();
+  const tour = await getTourBySlug(decodedSlug);
 
   if (!tour) {
     notFound();
   }
 
   const [departures, reviews, { tours: allTours }] = await Promise.all([
-    getTourDepartures(slug),
-    getTourReviews(slug),
+    getTourDepartures(decodedSlug),
+    getTourReviews(decodedSlug),
     getTours({ limit: 4 }),
   ]);
 

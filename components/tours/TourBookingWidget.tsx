@@ -27,11 +27,11 @@ export default function TourBookingWidget({ tour, departures }: TourBookingWidge
   const totalPrice = tour.price * travelers;
 
   const handleBookNow = () => {
-    const params = new URLSearchParams({
-      tourId: tour._id,
-      date: selectedDate,
-      travelers: travelers.toString(),
-    });
+    const params = new URLSearchParams();
+    if (tour.slug) params.set("slug", tour.slug);
+    if (tour._id) params.set("tourId", tour._id);
+    params.set("date", selectedDate);
+    params.set("travelers", travelers.toString());
     router.push(`/checkout?${params.toString()}`);
   };
 

@@ -7,18 +7,19 @@ export async function GET(
 ) {
   try {
     const { slug } = await context.params;
-    const tour = await getTourBySlug(slug);
+    const identifier = decodeURIComponent(slug).trim();
+    const tour = await getTourBySlug(identifier);
 
     if (!tour) {
       return NextResponse.json(
-        { status: "error", message: "Tour not found" },
+        { status: "error", message: "Expedition tour not found" },
         { status: 404 }
       );
     }
 
     const [departures, reviews] = await Promise.all([
-      getTourDepartures(slug),
-      getTourReviews(slug),
+      getTourDepartures(identifier),
+      getTourReviews(identifier),
     ]);
 
     return NextResponse.json({
