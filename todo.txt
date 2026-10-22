@@ -1,0 +1,679 @@
+# Build Touroholic — A Complete Tour Discovery and Booking Platform
+
+Act as a senior full-stack developer, database architect, UI/UX designer, and software tester. Build a complete, polished, responsive tour discovery and booking web application called **Touroholic**.
+
+This is a redevelopment of a tour management application inspired by Natours. The main focus is excellent UI/UX, proper MongoDB schema design, realistic booking workflows, authentication, and practical recommendation features.
+
+Do not create only a static frontend or a prototype. Build a functional full-stack application with a clear architecture, reusable components, database models, API routes, validation, error handling, and deployment readiness.
+
+## 1. Technology stack
+
+Use the following stack:
+
+- **Framework:** Next.js with App Router
+- **Language:** TypeScript with strict type checking
+- **Frontend:** React
+- **Styling:** Tailwind CSS
+- **UI components:** shadcn/ui
+- **Icons:** Lucide React
+- **Backend:** Next.js Route Handlers under `app/api/`
+- **Database:** MongoDB Atlas
+- **ODM:** Mongoose
+- **Authentication:** Auth.js or a secure credentials-based authentication implementation
+- **Form validation:** Zod and React Hook Form
+- **Image hosting:** Configurable image provider, preferably Cloudinary
+- **Deployment:** Vercel
+- **Testing:** Vitest or Jest for unit tests and Playwright for important end-to-end workflows
+
+Use compatible, stable package versions. Avoid unnecessary dependencies and keep the project compatible with Vercel's standard Next.js deployment.
+
+Do not create a separate Express server unless there is a compelling technical reason. Keep the application and API in one Next.js repository for simpler deployment.
+
+## 2. UI/UX design requirements
+
+Create a premium travel-booking website with an elegant, modern, image-rich interface.
+
+Design direction:
+- Premium travel editorial aesthetic
+- Large destination photography
+- Spacious layouts and consistent typography
+- Warm neutral backgrounds with deep forest-green or teal accents
+- Rounded cards, subtle shadows, clean borders, and tasteful transitions
+- High-quality travel imagery and consistent image ratios
+- Clear navigation, accessible forms, loading states, empty states, and helpful error messages
+- Responsive layouts for mobile, tablet, and desktop
+- Accessible keyboard navigation, focus indicators, and appropriate contrast
+
+Avoid generic dashboard-like designs, excessive gradients, excessive glassmorphism, cluttered layouts, and oversized decorative elements.
+
+Create a consistent design system with reusable buttons, inputs, cards, badges, dialogs, navigation, skeleton loaders, and toast notifications.
+
+## 3. Pages to build
+
+### A. Home page — `/`
+
+Build a visually impressive travel landing page containing:
+
+1. A responsive navbar with logo, Explore, Destinations, About, My Bookings, Login, and Sign Up.
+2. A large hero section with a travel photograph, headline, supporting text, and a prominent search panel.
+3. Search fields for destination, travel dates, number of travelers, and budget where appropriate.
+4. Featured tours displayed as attractive image cards.
+5. Popular destinations.
+6. Categories such as adventure, beaches, nature, cultural trips, and weekend getaways.
+7. A "Recommended for You" section.
+8. A section explaining why customers should choose Touroholic.
+9. Customer reviews and ratings.
+10. A newsletter or travel-updates section with proper validation.
+11. A polished footer containing navigation, contact details, and social links.
+
+Make the homepage feel like a real travel platform, not a college project template.
+
+### B. Explore tours — `/tours`
+
+Build a complete tour discovery page.
+
+Features:
+- Search tours by name or destination.
+- Filter by minimum and maximum price.
+- Filter by duration, difficulty, rating, and category.
+- Filter by available dates when schedule data is available.
+- Sort by price, rating, popularity, and newest.
+- Pagination or "Load More".
+- Responsive filter sidebar or mobile filter drawer.
+- Display active filters and a clear-all option.
+- Display result counts.
+- Show loading skeletons and a useful no-results state.
+
+Every tour card should display its image, title, destination, duration, difficulty, rating, price, and a link to its detail page.
+
+Filters, sorting, and pagination must actually affect the returned data.
+
+### C. Tour details — `/tours/[slug]`
+
+Create a complete tour details page containing:
+
+- Large hero image and image gallery.
+- Tour title, destination, average rating, and review count.
+- Price and duration.
+- Difficulty level and maximum group size.
+- Description and highlights.
+- Itinerary organized by day.
+- Starting location and other tour locations.
+- Guide information when available.
+- Included and excluded services.
+- Available schedules and departure dates.
+- Cancellation policy and booking conditions.
+- Customer reviews and ratings.
+- Similar or recommended tours.
+- A sticky booking panel on desktop and an appropriate mobile booking action.
+
+Selecting a date and number of travelers should update the booking price where applicable.
+
+Only show genuine database-backed availability. Do not invent available seats or claim a booking is confirmed before the backend confirms it.
+
+### D. Authentication pages
+
+Build:
+- `/login`
+- `/register`
+- `/forgot-password`
+- `/reset-password`
+
+Include:
+- Professional split-screen or centered-card layouts.
+- Form validation and password visibility toggle.
+- Email and password fields.
+- Password strength feedback.
+- Clear validation errors.
+- Loading and success states.
+- Links between login and registration.
+- Optional Google login only if properly configured.
+
+Implement secure password hashing, session management, authentication checks, and logout.
+
+Never store plaintext passwords or expose authentication secrets in frontend code.
+
+Keep the interface ready for future email verification and password-reset email integration. Do not pretend emails have been sent when the service is not configured.
+
+### E. User profile — `/profile`
+
+Include:
+- Profile information.
+- Edit profile form.
+- Profile image.
+- Password update form.
+- Account information.
+- My bookings.
+- My reviews.
+- Saved or favourite tours.
+
+Users must only be able to access and modify their own private data.
+
+### F. Booking flow — `/checkout` and `/my-bookings`
+
+Implement a realistic booking workflow.
+
+Steps:
+
+1. User selects a tour.
+2. User selects a valid departure date and traveler count.
+3. The application checks availability and calculates the price on the server.
+4. User reviews the booking summary.
+5. User confirms the reservation.
+6. The backend validates availability again and creates the booking.
+7. The user sees a confirmation page with a booking reference.
+8. The booking appears in My Bookings.
+
+Use MongoDB transactions where supported for inventory-sensitive operations, with an appropriate fallback or atomic update strategy when transactions are unavailable.
+
+Prevent duplicate submissions, invalid quantities, price tampering, unauthorized booking access, and overbooking.
+
+For this initial version, implement a clear booking status lifecycle such as `pending`, `confirmed`, `cancelled`, and `completed`, plus payment statuses such as `unpaid`, `paid`, `failed`, and `refunded`.
+
+Do not mark a booking as paid without a verified payment confirmation. If a payment provider is not configured, support an explicitly labelled demo or unpaid reservation workflow rather than pretending a payment succeeded.
+
+Add cancellation rules and validate them on the server.
+
+### G. Reviews
+
+Allow authenticated users to submit a rating and written review.
+
+Requirements:
+- Rating from 1 to 5.
+- Review text validation.
+- One review per user per tour.
+- Edit and delete the user's own review.
+- Display review author, rating, date, and text.
+- Recalculate the tour's average rating and rating count consistently.
+- Enforce the one-review rule using a unique compound MongoDB index.
+
+### H. Admin dashboard — `/admin`
+
+Create role-protected admin pages for:
+
+- Dashboard statistics.
+- Create, edit, and delete tours.
+- Upload or select tour images.
+- Manage tour schedules and capacity.
+- View and manage bookings.
+- Manage users and roles.
+- Moderate reviews.
+
+Use server-side authorization for every administrative operation. Hiding an admin button in the frontend is not sufficient security.
+
+## 4. MongoDB database design
+
+Design proper Mongoose schemas before implementing the business logic.
+
+Create the following collections.
+
+### A. Users
+
+Suggested fields:
+
+- `_id`
+- `name`
+- `email`
+- `passwordHash`
+- `photo`
+- `role`: `user` or `admin`
+- `active`
+- `favoriteTours`: array of Tour ObjectIds, or a separate favourites collection if more suitable
+- `createdAt`
+- `updatedAt`
+
+Requirements:
+- Normalize email values.
+- Enforce unique email addresses.
+- Never return password hashes through public API responses.
+- Validate all fields.
+
+### B. Tours
+
+Suggested fields:
+
+- `_id`
+- `name`
+- `slug`
+- `summary`
+- `description`
+- `category`
+- `duration`
+- `maxGroupSize`
+- `difficulty`
+- `price`
+- `currency`
+- `ratingsAverage`
+- `ratingsQuantity`
+- `imageCover`
+- `images`: array of image URLs and optional metadata
+- `startLocation`: GeoJSON Point with longitude and latitude
+- `locations`: array of GeoJSON-based or structured locations
+- `guides`: references to users with appropriate guide information
+- `itinerary`: array of day number, title, and description
+- `included`
+- `excluded`
+- `highlights`
+- `cancellationPolicy`
+- `isPublished`
+- `createdAt`
+- `updatedAt`
+
+Create a unique index on `slug`, suitable indexes for commonly used filters, and a `2dsphere` index for `startLocation`.
+
+Do not create indexes indiscriminately. Document which query each important index supports.
+
+### C. Reviews
+
+Fields:
+
+- `_id`
+- `tour`: Tour ObjectId
+- `user`: User ObjectId
+- `rating`
+- `review`
+- `createdAt`
+- `updatedAt`
+
+Create a unique compound index on `{ tour: 1, user: 1 }`.
+
+### D. Bookings
+
+Fields:
+
+- `_id`
+- `bookingReference`
+- `user`: User ObjectId
+- `tour`: Tour ObjectId
+- `departureDate`
+- `travelers`
+- `pricePerTraveler`
+- `totalPrice`
+- `currency`
+- `bookingStatus`
+- `paymentStatus`
+- `paymentReference`, when applicable
+- `createdAt`
+- `updatedAt`
+
+Store the agreed booking price as a historical snapshot. Do not rely only on the current tour price to display past bookings.
+
+### E. Tour schedules / departures
+
+Create a separate `TourDeparture` or `TourSchedule` collection because departures have their own availability and capacity.
+
+Suggested fields:
+- `_id`
+- `tour`: Tour ObjectId
+- `startDate`
+- `endDate`
+- `capacity`
+- `reservedSeats`
+- `status`
+- `createdAt`
+- `updatedAt`
+
+Validate `reservedSeats` against capacity and prevent concurrent requests from overselling the remaining seats.
+
+### F. Optional favourites
+
+If favourites need their own collection, use:
+
+- `_id`
+- `user`: User ObjectId
+- `tour`: Tour ObjectId
+- `createdAt`
+
+Create a unique compound index on `{ user: 1, tour: 1 }`.
+
+Explain your embedding-versus-referencing decisions in the README.
+
+## 5. Database connection and environment configuration
+
+I will provide MongoDB Atlas credentials later.
+
+Implement:
+- A reusable MongoDB connection helper.
+- Connection reuse suitable for Next.js serverless deployments.
+- Mongoose model files with protection against model recompilation.
+- Clear connection and query error handling.
+- No hardcoded connection strings.
+
+Create `.env.example` with placeholders such as:
+
+`MONGODB_URI=`
+`AUTH_SECRET=`
+`NEXT_PUBLIC_APP_URL=http://localhost:3000`
+`CLOUDINARY_CLOUD_NAME=`
+`CLOUDINARY_API_KEY=`
+`CLOUDINARY_API_SECRET=`
+`CLOUDINARY_UPLOAD_PRESET=`
+`UNSPLASH_ACCESS_KEY=`
+`PAYMENT_SECRET_KEY=`
+`PAYMENT_WEBHOOK_SECRET=`
+
+Only include variables that the application actually uses. Optional integrations must not be required to run the core application.
+
+Never commit `.env.local` or real secrets to GitHub.
+
+## 6. Image storage and management
+
+Prepare the application to use an image provider later.
+
+Preferred approach:
+- Use Cloudinary for uploaded tour photos and optimized image delivery.
+- Use curated Unsplash or Pexels photography for initial sample content.
+- Store image URLs and relevant metadata in MongoDB.
+- Use the Next.js image component where appropriate.
+- Configure allowed remote image hosts explicitly.
+- Provide graceful fallbacks for missing or failed images.
+- Preserve required image attribution and follow each provider's terms.
+
+Create an image-provider abstraction so the image service can be changed without rewriting the tour schemas.
+
+For admin uploads, implement a secure server-side upload workflow or a signed direct-upload workflow. Never expose Cloudinary API secrets in browser code.
+
+Do not make image API credentials mandatory for the initial UI.
+
+## 7. Recommendation system — no LLM required
+
+Build a basic, explainable rule-based recommendation engine.
+
+Inputs can include:
+- Preferred destination.
+- Budget.
+- Preferred difficulty.
+- Tour category.
+- Duration.
+- Previous bookings.
+- Favourite tours.
+- Previously reviewed tours.
+
+Ranking approach:
+1. Match the user's budget.
+2. Prioritize preferred categories and destinations.
+3. Consider duration and difficulty preferences.
+4. Boost relevant ratings and popularity.
+5. Exclude unpublished tours and, where departure dates matter, tours without eligible availability.
+
+Return a ranked list with short explanations such as:
+- "Matches your budget."
+- "Similar to tours you saved."
+- "Highly rated adventure tour."
+- "Matches your preferred duration."
+
+Do not describe this as machine learning or AI if it is a rule-based scoring algorithm.
+
+For logged-out users, provide general recommendations based on popular, highly rated, or featured tours.
+
+Keep the scoring function separate and testable.
+
+## 8. Optional basic chatbot
+
+Do not integrate an LLM initially.
+
+Create an optional travel-help widget that can answer a limited set of predefined questions about:
+- Finding tours.
+- Price filters.
+- Booking steps.
+- Cancellation policy.
+- Login problems.
+- Contact information.
+
+For tour-related questions, use actual application data when available. For unknown questions, explain the limitation and provide a link to the relevant page or support section.
+
+Keep the chatbot modular so a small LLM integration can be added later through a server-side API without redesigning the application.
+
+Do not invent booking status, travel policies, prices, or availability in chatbot responses.
+
+## 9. API routes
+
+Implement well-organized REST-style Route Handlers, including:
+
+- `GET /api/tours`
+- `GET /api/tours/[slug]`
+- `POST /api/tours`
+- `PATCH /api/tours/[id]`
+- `DELETE /api/tours/[id]`
+- `GET /api/users/me`
+- `PATCH /api/users/me`
+- Authentication routes as appropriate for the chosen authentication library
+- `GET /api/reviews`
+- `POST /api/reviews`
+- `PATCH /api/reviews/[id]`
+- `DELETE /api/reviews/[id]`
+- `POST /api/bookings`
+- `GET /api/bookings/my`
+- `GET /api/bookings/[id]`
+- `POST /api/bookings/[id]/cancel`
+- Admin routes for schedules, users, tours, and bookings
+- `GET /api/recommendations`
+- Optional image upload routes
+
+Use consistent JSON response formats, correct HTTP status codes, query validation, pagination, and appropriate error messages.
+
+Validate input using Zod or an equivalent schema-validation approach.
+
+Enforce authentication, ownership, and role checks on the server.
+
+Use rate limiting where appropriate for login and other sensitive endpoints.
+
+Do not trust user-provided prices, roles, ownership IDs, payment statuses, or booking availability.
+
+## 10. Project structure
+
+Use a clear modular structure similar to:
+
+app/
+  page.tsx
+  layout.tsx
+  tours/
+    page.tsx
+    [slug]/
+      page.tsx
+  login/
+    page.tsx
+  register/
+    page.tsx
+  profile/
+    page.tsx
+  checkout/
+    page.tsx
+  my-bookings/
+    page.tsx
+  admin/
+    page.tsx
+  api/
+    tours/
+    reviews/
+    bookings/
+    recommendations/
+    users/
+components/
+  layout/
+  home/
+  tours/
+  booking/
+  auth/
+  profile/
+  admin/
+  chatbot/
+  ui/
+lib/
+  db/
+  auth/
+  validation/
+  recommendations/
+  images/
+  pricing/
+  utils/
+models/
+  User.ts
+  Tour.ts
+  Review.ts
+  Booking.ts
+  TourDeparture.ts
+types/
+scripts/
+  seed.ts
+tests/
+  unit/
+  integration/
+  e2e/
+
+This is a suggested structure, not a reason to create empty files. Implement modules where they are needed and keep responsibilities separated.
+
+## 11. Seed data and demo mode
+
+Create a seed script that inserts realistic sample data:
+- At least 12 varied tours.
+- Multiple destinations and categories.
+- Different prices, durations, and difficulty levels.
+- Ratings and reviews.
+- Tour schedules with capacities.
+- Sample itinerary entries and image URLs.
+
+Use attractive, working image URLs with appropriate attribution.
+
+Seed data must be reproducible and should not create duplicates on every run. Use stable slugs and upsert operations where appropriate.
+
+Create a safe development workflow for an empty database.
+
+If MongoDB credentials are missing, allow the public interface to run with clearly labelled sample data in a development-only mode. Do not silently pretend database writes have succeeded. Disable or clearly explain operations requiring a real database.
+
+Do not expose development accounts or test passwords in production.
+
+## 12. Security and correctness
+
+Implement:
+- Secure password hashing.
+- Secure authentication and session handling.
+- Authorization on all private routes.
+- Server-side validation.
+- Protection against mass assignment and privilege escalation.
+- Safe handling of user input.
+- Unique indexes and duplicate-key error handling.
+- Database connection reuse.
+- Correct date, currency, and price calculations.
+- Booking capacity checks.
+- Safe payment integration boundaries.
+- Appropriate HTTP status codes.
+- No secrets in client bundles.
+- No sensitive information in error responses.
+
+Avoid claiming PCI compliance or production payment security without the required implementation and verification.
+
+## 13. Vercel deployment requirements
+
+Prepare the project for deployment to Vercel.
+
+Requirements:
+- All necessary build scripts work.
+- `npm run build` succeeds.
+- Environment variables are documented.
+- MongoDB connection handling works with serverless execution.
+- API routes use supported Next.js runtime features.
+- Images are configured for remote hosting.
+- No dependency on local persistent filesystem storage.
+- No separate backend server is required.
+- Add a README explaining local setup, database setup, seeding, image-provider setup, and deployment.
+
+Document how to configure MongoDB Atlas network access and credentials for the deployed environment.
+
+Use GitHub as the source repository for Vercel deployment.
+
+Do not claim that deployment has succeeded unless it has actually been performed and verified.
+
+## 14. Testing and quality assurance
+
+Add tests for:
+- User and tour schema validation.
+- Unique email and slug constraints.
+- Duplicate review prevention.
+- Tour filtering and sorting.
+- Recommendation ranking.
+- Booking price calculation.
+- Booking availability and concurrency.
+- Authentication and authorization.
+- Users accessing only their own bookings.
+- Admin-only operations.
+
+Test the main flows:
+1. Browse tours without logging in.
+2. Register and log in.
+3. Open a tour and apply filters.
+4. Save a favourite.
+5. Create a booking.
+6. View the booking in the user dashboard.
+7. Submit a review.
+8. Verify that duplicate reviews are rejected.
+9. Test unauthorized access to protected endpoints.
+
+Fix errors rather than merely documenting them.
+
+## 15. Development workflow
+
+Work in the following order:
+
+**Phase 1 — Foundation**
+- Inspect the existing repository if one exists.
+- Set up Next.js, TypeScript, Tailwind CSS, shadcn/ui, and the design system.
+- Build the responsive navigation, homepage, tour cards, and reusable components.
+- Ensure the public UI works with sample data.
+
+**Phase 2 — Database**
+- Define Mongoose schemas and indexes.
+- Implement the connection helper.
+- Create the seed script.
+- Document the data model and relationships.
+
+**Phase 3 — Backend**
+- Implement tour queries, filtering, sorting, and pagination.
+- Implement authentication and profile APIs.
+- Implement reviews, schedules, bookings, and recommendations.
+- Add validation and authorization.
+
+**Phase 4 — Integration**
+- Connect every page to its API.
+- Remove fake interactions and nonfunctional buttons.
+- Add loading, empty, error, and success states.
+- Verify that forms actually persist data.
+
+**Phase 5 — Advanced functionality**
+- Add admin management.
+- Add image-provider integration.
+- Add the basic FAQ chatbot.
+- Add optional payment-provider integration only when credentials are supplied.
+
+**Phase 6 — Verification and deployment**
+- Run linting, type checking, tests, and production build.
+- Fix all blocking errors.
+- Write setup and deployment documentation.
+- Prepare environment variables for MongoDB Atlas and Vercel.
+
+## 16. Final instructions
+
+Start by inspecting the repository and presenting a short implementation plan. Then implement the project in manageable phases.
+
+Prioritize a beautiful, fully responsive user interface first, followed by database integration and functional workflows.
+
+Do not generate only a design mockup, pseudocode, or a long explanation instead of working code.
+
+Do not hardcode secrets, invent real database records, fake successful payments, or claim functionality works without implementing it.
+
+If credentials are missing, use explicit placeholders and continue implementing everything that does not depend on those credentials.
+
+Keep the application simple enough for a student to understand and explain during a database project presentation, but structure it according to professional full-stack development practices.
+
+At the end, provide:
+1. A summary of implemented features.
+2. The actual project structure.
+3. Database schema and relationship explanations.
+4. Environment variables I need to configure.
+5. Commands to run locally.
+6. Instructions to connect MongoDB Atlas.
+7. Instructions to configure the image provider.
+8. GitHub and Vercel deployment steps.
+9. Test results and any remaining limitations.
+
+Begin with Phase 1 now. Continue through the implementation rather than stopping after the planning stage.
