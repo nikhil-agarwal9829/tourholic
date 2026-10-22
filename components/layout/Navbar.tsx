@@ -1,33 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { Compass, Menu, X, User as UserIcon, Calendar, ShieldCheck, LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<{ name: string; role: string; email: string } | null>(null);
-  const router = useRouter();
-
-  useEffect(() => {
-    // Check session
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setUser(data.user);
-        }
-      })
-      .catch(() => setUser(null));
-  }, []);
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    router.push("/");
-    router.refresh();
-  };
+  const { user, logout, isLoading } = useAuth();
 
   return (
     <nav className="sticky top-0 z-50 bg-[#fbfaf8]/90 backdrop-blur-md border-b border-[#e8e3d8] transition-all">
@@ -98,7 +78,7 @@ export default function Navbar() {
                   <span>{user.name.split(" ")[0]}</span>
                 </Link>
                 <button
-                  onClick={handleLogout}
+                  onClick={() => logout()}
                   title="Logout"
                   className="p-1.5 text-stone-500 hover:text-red-700 hover:bg-stone-100 rounded-full transition-colors"
                 >
@@ -190,7 +170,7 @@ export default function Navbar() {
                 <button
                   onClick={() => {
                     setIsOpen(false);
-                    handleLogout();
+                    logout();
                   }}
                   className="text-left px-3 py-2 text-red-600 font-medium"
                 >

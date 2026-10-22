@@ -14,6 +14,7 @@ export interface ITour extends Document {
   ratingsAverage: number;
   ratingsQuantity: number;
   imageCover: string;
+  coverImagePublicId?: string;
   images: string[];
   startLocation: {
     type: string;
@@ -127,6 +128,7 @@ const TourSchema = new Schema<ITour>(
       type: String,
       required: [true, "A tour must have a cover image"],
     },
+    coverImagePublicId: String,
     images: [String],
     startLocation: {
       type: {

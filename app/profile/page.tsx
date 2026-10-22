@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { User, Lock, Calendar, Star, Compass, CheckCircle2, AlertCircle, Shield } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface UserProfile {
   _id?: string;
@@ -14,6 +15,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
+  const { user, refreshUser, isLoading: isAuthLoading } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -23,17 +25,14 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"profile" | "security">("profile");
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setProfile(data.user);
-          setName(data.user.name || "");
-        }
-      })
-      .catch((err) => console.error("Error loading profile:", err))
-      .finally(() => setIsLoading(false));
-  }, []);
+    if (user) {
+      setProfile(user as UserProfile);
+      setName(user.name || "");
+      setIsLoading(false);
+    } else if (!isAuthLoading) {
+      setIsLoading(false);
+    }
+  }, [user, isAuthLoading]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();

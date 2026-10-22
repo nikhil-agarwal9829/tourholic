@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 import { Tour } from "@/types";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   ShieldCheck,
   Calendar,
@@ -15,11 +16,14 @@ import {
   Lock,
   ArrowRight,
   AlertCircle,
+  Clock,
+  HelpCircle,
 } from "lucide-react";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const tourId = searchParams.get("tourId") || "";
   const departureDate = searchParams.get("date") || "2026-06-15";
@@ -29,27 +33,30 @@ function CheckoutContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-  const [paymentChoice, setPaymentChoice] = useState("pay_later");
+  const [specialRequests, setSpecialRequests] = useState("");
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingConfirmed, setBookingConfirmed] = useState<{
     bookingReference: string;
-    totalPrice: number;
+    tourName: string;
+    departureDate: string;
     travelers: number;
+    totalPrice: number;
+    currency: string;
+    bookingStatus: string;
+    paymentStatus: string;
+    paymentDueAt: string;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    // Check if user is logged in to pre-fill name and email
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setGuestName(data.user.name || "");
-          setGuestEmail(data.user.email || "");
-        }
-      })
-      .catch(() => {});
+    if (user) {
+      setGuestName(user.name || "");
+      setGuestEmail(user.email || "");
+    }
+  }, [user]);
 
+  useEffect(() => {
     // Fetch tour info
     if (tourId) {
       fetch(`/api/tours/${tourId}`)
@@ -62,7 +69,6 @@ function CheckoutContent() {
         .catch((err) => console.error("Error fetching tour:", err))
         .finally(() => setIsLoading(false));
     } else {
-      // Default to sample tour if no id
       fetch(`/api/tours?limit=1`)
         .then((res) => res.json())
         .then((data) => {
@@ -72,16 +78,29 @@ function CheckoutContent() {
     }
   }, [tourId]);
 
-  const handleConfirmReservation = async (e: React.FormEvent) => {
+  // Open confirmation modal
+  const handleOpenConfirmModal = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!guestName.trim() || !guestEmail.trim()) {
-      setErrorMessage("Please provide traveler name and contact email.");
+    if (!user) {
+      setErrorMessage("Please sign in to complete your expedition booking.");
       return;
     }
 
+    if (!guestName.trim() || !guestEmail.trim()) {
+      setErrorMessage("Please provide traveler full name and a valid email.");
+      return;
+    }
+
+    setShowConfirmModal(true);
+  };
+
+  // Execute actual booking submission after user confirms modal
+  const handleExecuteBooking = async () => {
     setIsSubmitting(true);
+    setErrorMessage("");
+
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -90,32 +109,41 @@ function CheckoutContent() {
           tourId: tour?._id || tourId,
           departureDate,
           travelers: travelersCount,
-          guestName,
-          guestEmail,
-          paymentMethod: paymentChoice,
+          guestName: guestName.trim(),
+          guestEmail: guestEmail.trim(),
+          specialRequests,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(data.message || "Failed to process reservation.");
+        setShowConfirmModal(false);
+        setErrorMessage(data.message || "Failed to confirm expedition booking.");
         return;
       }
 
+      setShowConfirmModal(false);
       setBookingConfirmed({
         bookingReference: data.data.bookingReference,
-        totalPrice: data.data.totalPrice,
+        tourName: tour?.name || "Expedition",
+        departureDate,
         travelers: data.data.travelers,
+        totalPrice: data.data.totalPrice,
+        currency: data.data.currency || tour?.currency || "USD",
+        bookingStatus: data.data.bookingStatus || "confirmed",
+        paymentStatus: data.data.paymentStatus || "unpaid",
+        paymentDueAt: data.data.paymentDueAt,
       });
     } catch {
-      setErrorMessage("Network error processing your reservation. Please try again.");
+      setShowConfirmModal(false);
+      setErrorMessage("Network error while creating reservation. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="min-h-screen py-24 text-center text-stone-500 text-sm">
         Verifying itinerary and reservation rates...
@@ -140,8 +168,17 @@ function CheckoutContent() {
 
   const totalPrice = tour.price * travelersCount;
 
-  // Confirmation Success View
+  // View: Booking Confirmed Success Screen
   if (bookingConfirmed) {
+    const formattedDeadline = bookingConfirmed.paymentDueAt
+      ? new Date(bookingConfirmed.paymentDueAt).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : "Within 3 days of booking";
+
     return (
       <div className="bg-[#fbfaf8] min-h-screen py-16">
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
@@ -152,46 +189,71 @@ function CheckoutContent() {
 
             <div>
               <span className="text-xs uppercase tracking-widest font-semibold text-[#124e3f]">
-                Reservation Confirmed
+                Booking Confirmed!
               </span>
               <h1 className="font-serif text-3xl font-bold text-[#1c2421] mt-1">
                 Your Adventure Awaits!
               </h1>
               <p className="text-xs sm:text-sm text-stone-600 mt-2">
-                We have reserved your spots for <span className="font-semibold text-stone-800">{tour.name}</span>.
+                Your reservation has been created successfully. Payment is currently pending.
               </p>
             </div>
 
-            {/* Reference Box */}
-            <div className="bg-[#f4efe6] p-5 rounded-2xl border border-[#e2dcce] text-left space-y-2">
-              <div className="flex justify-between items-center text-xs">
+            {/* Reference & Status Card */}
+            <div className="bg-[#f4efe6] p-6 rounded-2xl border border-[#e2dcce] text-left space-y-3">
+              <div className="flex justify-between items-center text-xs pb-2 border-b border-[#e2dcce]">
                 <span className="text-stone-500 uppercase tracking-wider font-semibold">Booking Reference</span>
-                <span className="font-mono font-bold text-sm text-[#124e3f] bg-white px-2 py-0.5 rounded border border-[#e8e3d8]">
+                <span className="font-mono font-bold text-sm text-[#124e3f] bg-white px-2.5 py-1 rounded border border-[#e8e3d8]">
                   {bookingConfirmed.bookingReference}
                 </span>
               </div>
-              <div className="flex justify-between text-xs text-stone-700 pt-1">
-                <span>Departure Date:</span>
-                <span className="font-semibold">{new Date(departureDate).toLocaleDateString()}</span>
+              <div className="flex justify-between text-xs text-stone-700">
+                <span>Expedition Tour:</span>
+                <span className="font-semibold text-right">{bookingConfirmed.tourName}</span>
               </div>
               <div className="flex justify-between text-xs text-stone-700">
-                <span>Guests:</span>
-                <span className="font-semibold">{bookingConfirmed.travelers} Travelers</span>
+                <span>Departure Date:</span>
+                <span className="font-semibold">
+                  {new Date(bookingConfirmed.departureDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-stone-700">
+                <span>Guest Count:</span>
+                <span className="font-semibold">{bookingConfirmed.travelers} Guests</span>
               </div>
               <div className="flex justify-between text-xs text-stone-700">
                 <span>Total Amount:</span>
-                <span className="font-semibold">{formatPrice(bookingConfirmed.totalPrice, tour.currency)}</span>
-              </div>
-              <div className="flex justify-between text-xs text-stone-700">
-                <span>Status:</span>
-                <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Confirmed (Unpaid / Demo Reservation)
+                <span className="font-bold text-[#124e3f] text-sm">
+                  {formatPrice(bookingConfirmed.totalPrice, bookingConfirmed.currency)}
                 </span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-1 border-t border-[#e2dcce]">
+                <span>Booking Status:</span>
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[11px] uppercase tracking-wider">
+                  Confirmed
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Payment Status:</span>
+                <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded text-[11px] uppercase tracking-wider">
+                  Unpaid
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-2 text-stone-600 border-t border-[#e2dcce]">
+                <span className="flex items-center gap-1 font-medium">
+                  <Clock className="w-3.5 h-3.5 text-[#124e3f]" />
+                  Payment Deadline:
+                </span>
+                <span className="font-semibold text-[#124e3f]">{formattedDeadline}</span>
               </div>
             </div>
 
             <p className="text-xs text-stone-500 leading-relaxed max-w-md mx-auto">
-              A copy of your expedition itinerary and meeting coordinates has been prepared. You can inspect or cancel your booking at any time under My Bookings.
+              Seats have been officially locked in our reservation registry. An expedition invoice has been issued. You can inspect or manage your booking anytime under My Bookings.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
@@ -199,7 +261,7 @@ function CheckoutContent() {
                 href="/my-bookings"
                 className="flex-1 py-3.5 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl text-xs font-bold text-center transition-colors shadow-sm"
               >
-                Go to My Bookings
+                View My Booking
               </Link>
               <Link
                 href="/tours"
@@ -232,10 +294,34 @@ function CheckoutContent() {
           </p>
         </div>
 
+        {/* Authentication Notice if not signed in */}
+        {!user && (
+          <div className="mb-8 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-xs font-bold">Authentication Required to Book</p>
+                <p className="text-[11px] text-amber-700">
+                  Please log in with your explorer account or register before reserving departures.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/login?redirect=/checkout?tourId=${tour._id || tour.slug}&date=${departureDate}&travelers=${travelersCount}`}
+              className="px-4 py-2 bg-[#124e3f] text-white rounded-xl text-xs font-semibold hover:bg-[#0c382d] text-center shrink-0"
+            >
+              Sign In to Book
+            </Link>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Left Column: Guest Info & Payment Form */}
           <div className="lg:col-span-7 space-y-8">
-            <form onSubmit={handleConfirmReservation} className="bg-white rounded-2xl p-6 sm:p-8 border border-[#e8e3d8] travel-card-shadow space-y-6">
+            <form
+              onSubmit={handleOpenConfirmModal}
+              className="bg-white rounded-2xl p-6 sm:p-8 border border-[#e8e3d8] travel-card-shadow space-y-6"
+            >
               <h2 className="font-serif text-xl font-bold text-[#1c2421] border-b border-[#f0ece3] pb-3">
                 1. Lead Traveler Details
               </h2>
@@ -268,31 +354,37 @@ function CheckoutContent() {
                     className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
                   />
                 </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
+                    Special Requests or Dietary Requirements (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={specialRequests}
+                    onChange={(e) => setSpecialRequests(e.target.value)}
+                    placeholder="e.g. Vegetarian meals, twin beds..."
+                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
+                  />
+                </div>
               </div>
 
               <h2 className="font-serif text-xl font-bold text-[#1c2421] border-b border-[#f0ece3] pb-3 pt-4">
                 2. Payment & Reservation Policy
               </h2>
 
-              <div className="space-y-3">
-                <label className="flex items-start gap-3 p-4 rounded-xl border border-[#124e3f] bg-emerald-50/40 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="pay_later"
-                    checked={paymentChoice === "pay_later"}
-                    onChange={() => setPaymentChoice("pay_later")}
-                    className="mt-1 text-[#124e3f] focus:ring-[#124e3f]"
-                  />
-                  <div>
-                    <span className="font-bold text-xs sm:text-sm text-stone-900 block">
-                      Pay Later / Guaranteed Demo Reservation
-                    </span>
-                    <span className="text-xs text-stone-600 block mt-0.5 leading-relaxed">
-                      Lock in your departure date and seats today without charging a card. You can pay via wire transfer or concierge invoice prior to expedition departure.
-                    </span>
-                  </div>
-                </label>
+              <div className="p-4 rounded-xl border border-[#e8e3d8] bg-[#fbfaf8] space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-stone-800">
+                  <Clock className="w-4 h-4 text-[#124e3f]" />
+                  <span>Reserve Now, Pay Pending Concierge Invoice</span>
+                </div>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  Payment is currently pending. Touroholic reserves your seats immediately upon booking. Your booking status will be set to <strong className="text-stone-800">Confirmed</strong> and payment status to <strong className="text-stone-800">Unpaid</strong>. A payment window of 3 days applies before departure.
+                </p>
+                <div className="pt-2 text-[11px] text-stone-500 flex items-center gap-1.5 border-t border-[#e8e3d8]">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>Payment gateway integration is currently in demo/invoice mode.</span>
+                </div>
               </div>
 
               {errorMessage && (
@@ -304,98 +396,182 @@ function CheckoutContent() {
 
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+                disabled={!user}
+                className="w-full py-4 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Lock className="w-4 h-4" />
-                <span>{isSubmitting ? "Securing Reservation..." : "Confirm My Reservation"}</span>
+                <ShieldCheck className="w-4 h-4" />
+                <span>Review & Confirm Reservation</span>
               </button>
-
-              <p className="text-[11px] text-stone-400 text-center leading-relaxed">
-                By confirming, you agree to Touroholic&apos;s small-group terms and safety regulations. You will not be charged upfront.
-              </p>
             </form>
           </div>
 
-          {/* Right Column: Order Summary */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-2xl p-6 border border-[#e8e3d8] travel-card-shadow space-y-6">
-              <h2 className="font-serif text-lg font-bold text-[#1c2421] border-b border-[#f0ece3] pb-3">
-                Expedition Summary
-              </h2>
+          {/* Right Column: Order Summary Card */}
+          <div className="lg:col-span-5">
+            <div className="bg-white rounded-2xl p-6 border border-[#e8e3d8] travel-card-shadow sticky top-28 space-y-6">
+              <h3 className="font-serif text-lg font-bold text-[#1c2421]">Expedition Summary</h3>
 
-              {/* Tour Thumb */}
+              {/* Tour Preview */}
               <div className="flex gap-4">
-                <div className="relative w-24 h-20 rounded-xl overflow-hidden bg-stone-100 shrink-0">
-                  <Image
-                    src={tour.imageCover}
-                    alt={tour.name}
-                    fill
-                    sizes="96px"
-                    className="object-cover"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                {tour.imageCover && (
+                  <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-stone-100 shrink-0">
+                    <Image
+                      src={tour.imageCover}
+                      alt={tour.name}
+                      fill
+                      sizes="96px"
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#124e3f] bg-[#f4efe6] px-2 py-0.5 rounded">
                     {tour.category}
                   </span>
-                  <h3 className="font-serif text-sm font-bold text-[#1c2421] line-clamp-2">
+                  <h4 className="font-serif text-sm font-bold text-[#1c2421] mt-1 line-clamp-2">
                     {tour.name}
-                  </h3>
-                  <div className="flex items-center gap-1 text-[11px] text-stone-500">
-                    <MapPin className="w-3 h-3 text-[#124e3f]" />
-                    <span>{tour.destination}, {tour.country}</span>
+                  </h4>
+                  <div className="flex items-center gap-1 text-xs text-stone-500 mt-1">
+                    <MapPin className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>
+                      {tour.destination}, {tour.country}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Schedule Info */}
-              <div className="space-y-2 py-3 border-y border-[#f0ece3] text-xs text-stone-600">
-                <div className="flex justify-between">
+              {/* Reservation Specifics */}
+              <div className="space-y-3 pt-3 border-t border-[#f0ece3] text-xs text-stone-600">
+                <div className="flex justify-between items-center">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-[#124e3f]" />
                     Departure Date:
                   </span>
-                  <span className="font-semibold text-stone-800">
-                    {new Date(departureDate).toLocaleDateString()}
+                  <span className="font-semibold text-stone-900">
+                    {new Date(departureDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-[#124e3f]" />
                     Travelers:
                   </span>
-                  <span className="font-semibold text-stone-800">{travelersCount} Guests</span>
+                  <span className="font-semibold text-stone-900">{travelersCount} Guests</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Price per Guest:</span>
+                  <span className="font-semibold text-stone-900">
+                    {formatPrice(tour.price, tour.currency)}
+                  </span>
                 </div>
               </div>
 
-              {/* Breakdown */}
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-stone-600">
-                  <span>{formatPrice(tour.price, tour.currency)} × {travelersCount}</span>
-                  <span className="font-semibold">{formatPrice(totalPrice, tour.currency)}</span>
+              {/* Total Calculation */}
+              <div className="pt-4 border-t border-[#f0ece3]">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <span className="text-xs uppercase tracking-wider font-semibold text-stone-400 block">
+                      Total Investment
+                    </span>
+                    <span className="text-[11px] text-stone-500">Taxes & park fees included</span>
+                  </div>
+                  <span className="font-serif text-2xl font-bold text-[#124e3f]">
+                    {formatPrice(totalPrice, tour.currency)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-stone-600">
-                  <span>Permits & National Park Pass</span>
-                  <span className="text-emerald-700 font-medium">Included</span>
-                </div>
-                <div className="flex justify-between text-stone-800 font-bold pt-3 border-t border-[#f0ece3] text-base">
-                  <span>Total Amount</span>
-                  <span className="text-[#124e3f]">{formatPrice(totalPrice, tour.currency)}</span>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-[#f4efe6] text-[11px] text-stone-700 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-[#124e3f]">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Flexibility Guarantee</span>
-                </div>
-                <p>{tour.cancellationPolicy}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-stone-200 space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#124e3f] flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-serif text-2xl font-bold text-[#1c2421]">
+                  Confirm Your Expedition Booking
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Please review your reservation details before confirming.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-700 leading-relaxed">
+              Are you sure you want to book <strong className="text-stone-900">{tour.name}</strong> for{" "}
+              <strong className="text-stone-900">{travelersCount} guest(s)</strong> at{" "}
+              <strong className="text-[#124e3f]">{formatPrice(totalPrice, tour.currency)}</strong>?
+            </p>
+
+            <div className="bg-[#fbfaf8] p-4 rounded-2xl border border-[#e8e3d8] space-y-2 text-xs">
+              <div className="flex justify-between text-stone-600">
+                <span>Selected Departure Date:</span>
+                <span className="font-semibold text-stone-900">
+                  {new Date(departureDate).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between text-stone-600">
+                <span>Lead Traveler:</span>
+                <span className="font-semibold text-stone-900">{guestName}</span>
+              </div>
+              <div className="flex justify-between text-stone-600">
+                <span>Contact Email:</span>
+                <span className="font-semibold text-stone-900">{guestEmail}</span>
+              </div>
+              <div className="flex justify-between text-stone-600 pt-2 border-t border-[#e8e3d8]">
+                <span>Total Amount:</span>
+                <span className="font-bold text-sm text-[#124e3f]">
+                  {formatPrice(totalPrice, tour.currency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-stone-600">
+                <span>Initial Payment Status:</span>
+                <span className="font-bold text-amber-700">Unpaid (Payment Pending)</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-3 rounded-xl border border-stone-300 text-stone-700 font-semibold text-xs hover:bg-stone-50 transition-colors disabled:opacity-50"
+              >
+                No, Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleExecuteBooking}
+                className="flex-1 py-3 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-xs transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Booking...</span>
+                  </>
+                ) : (
+                  <span>Yes, Book Tour</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -405,7 +581,7 @@ export default function CheckoutPage() {
     <Suspense
       fallback={
         <div className="min-h-screen py-24 text-center text-stone-500 text-sm">
-          Loading checkout...
+          Loading checkout session...
         </div>
       }
     >

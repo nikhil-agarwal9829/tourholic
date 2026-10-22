@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import TravelAssistantWidget from "@/components/chatbot/TravelAssistantWidget";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import "./globals.css";
 
 const jakartaSans = Plus_Jakarta_Sans({
@@ -34,10 +35,12 @@ export default function RootLayout({
       className={`${jakartaSans.variable} ${cormorantGaramond.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans bg-[#fbfaf8] text-[#1c2421]">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <TravelAssistantWidget />
+        <AuthProvider>
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <TravelAssistantWidget />
+        </AuthProvider>
       </body>
     </html>
   );

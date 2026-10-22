@@ -9,8 +9,14 @@ import { SAMPLE_TOURS } from "@/lib/data/sample-tours";
 export async function GET() {
   try {
     const session = await getSession();
-    // Allow viewing stats in demo if not logged in or if admin
-    const isAdmin = session?.role === "admin";
+
+    // Enforce server-side admin role check
+    if (!session || session.role !== "admin") {
+      return NextResponse.json(
+        { status: "error", message: "Forbidden. Administrator privileges required." },
+        { status: 403 }
+      );
+    }
 
     const db = await connectToDatabase();
 
@@ -20,19 +26,41 @@ export async function GET() {
         BookingModel.countDocuments(),
         UserModel.countDocuments(),
         BookingModel.find()
-          .populate("tour", "name price")
-          .populate("user", "name email")
+          .populate("tour", "name price slug imageCover currency")
+          .populate("user", "name email photo")
           .sort({ createdAt: -1 })
-          .limit(10)
+          .limit(20)
           .lean(),
       ]);
 
+      // Calculate gross booking volume from non-cancelled bookings
       const revenueAgg = await BookingModel.aggregate([
         { $match: { bookingStatus: { $ne: "cancelled" } } },
-        { $group: { _id: null, totalRevenue: { $sum: "$totalPrice" } } },
+        { $group: { _id: null, grossBookingValue: { $sum: "$totalPrice" } } },
       ]);
 
-      const totalRevenue = revenueAgg[0]?.totalRevenue || 0;
+      const totalRevenue = revenueAgg[0]?.grossBookingValue || 0;
+
+      // Format bookings for clean consumption by admin dashboard
+      const formattedBookings = bookings.map((b: any) => ({
+        _id: b._id.toString(),
+        bookingReference: b.bookingReference,
+        guestName: b.guestName || b.user?.name || "Registered Explorer",
+        guestEmail: b.guestEmail || b.user?.email || "",
+        tour: {
+          name: b.tour?.name || "Private Expedition",
+          price: b.pricePerTraveler || b.tour?.price || 0,
+          currency: b.currency || b.tour?.currency || "USD",
+        },
+        totalPrice: b.totalPrice,
+        currency: b.currency || "USD",
+        travelers: b.travelers,
+        departureDate: b.departureDate,
+        bookingStatus: b.bookingStatus,
+        paymentStatus: b.paymentStatus,
+        paymentDueAt: b.paymentDueAt ? new Date(b.paymentDueAt).toISOString() : undefined,
+        createdAt: b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString(),
+      }));
 
       return NextResponse.json({
         status: "success",
@@ -41,62 +69,28 @@ export async function GET() {
           totalBookings,
           totalUsers,
           totalRevenue,
-          recentBookings: bookings,
-          isAdmin,
+          recentBookings: formattedBookings,
+          isAdmin: true,
         },
       });
     }
 
-    // Demo stats fallback
+    // Demo store fallback for local development without Mongo
+    const globalBookings = (global.demoBookings || []) as Array<Record<string, unknown>>;
+    const totalRevenue = globalBookings.reduce(
+      (sum: number, b: any) => (b.bookingStatus !== "cancelled" ? sum + (b.totalPrice || 0) : sum),
+      0
+    );
+
     return NextResponse.json({
       status: "success",
       data: {
         totalTours: SAMPLE_TOURS.length,
-        totalBookings: 18,
-        totalUsers: 42,
-        totalRevenue: 34850,
-        recentBookings: [
-          {
-            _id: "demo-b-1",
-            bookingReference: "TRH-2026-BANFF8",
-            guestName: "Marcus Thorne",
-            guestEmail: "marcus@example.com",
-            tour: { name: "The Forest Hiker & Alpine Peaks", price: 1199 },
-            totalPrice: 2398,
-            travelers: 2,
-            departureDate: "2026-06-15",
-            bookingStatus: "confirmed",
-            paymentStatus: "unpaid",
-            createdAt: "2026-03-01T10:00:00Z",
-          },
-          {
-            _id: "demo-b-2",
-            bookingReference: "TRH-2026-AMALFI3",
-            guestName: "Elena Rostova",
-            guestEmail: "elena@example.com",
-            tour: { name: "Amalfi Coastline & Cliffside Villages", price: 1850 },
-            totalPrice: 1850,
-            travelers: 1,
-            departureDate: "2026-05-20",
-            bookingStatus: "confirmed",
-            paymentStatus: "paid",
-            createdAt: "2026-03-02T15:30:00Z",
-          },
-          {
-            _id: "demo-b-3",
-            bookingReference: "TRH-2026-SEREN4",
-            guestName: "David Miller",
-            guestEmail: "david@example.com",
-            tour: { name: "Serengeti Great Migration Safari", price: 3450 },
-            totalPrice: 6900,
-            travelers: 2,
-            departureDate: "2026-07-15",
-            bookingStatus: "confirmed",
-            paymentStatus: "unpaid",
-            createdAt: "2026-03-03T11:15:00Z",
-          },
-        ],
-        isAdmin,
+        totalBookings: globalBookings.length,
+        totalUsers: 3,
+        totalRevenue,
+        recentBookings: globalBookings,
+        isAdmin: true,
       },
     });
   } catch (error) {

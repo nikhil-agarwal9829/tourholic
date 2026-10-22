@@ -4,6 +4,7 @@ export interface IBooking extends Document {
   bookingReference: string;
   user: mongoose.Types.ObjectId;
   tour: mongoose.Types.ObjectId;
+  departureSchedule?: mongoose.Types.ObjectId;
   departureDate: string;
   travelers: number;
   pricePerTraveler: number;
@@ -11,9 +12,11 @@ export interface IBooking extends Document {
   currency: string;
   bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
   paymentStatus: "unpaid" | "paid" | "failed" | "refunded";
+  paymentDueAt: Date;
   paymentReference?: string;
   guestName?: string;
   guestEmail?: string;
+  specialRequests?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +40,10 @@ const BookingSchema = new Schema<IBooking>(
       ref: "Tour",
       required: true,
       index: true,
+    },
+    departureSchedule: {
+      type: Schema.Types.ObjectId,
+      ref: "TourDeparture",
     },
     departureDate: {
       type: String,
@@ -71,9 +78,15 @@ const BookingSchema = new Schema<IBooking>(
       default: "unpaid",
       index: true,
     },
+    paymentDueAt: {
+      type: Date,
+      required: true,
+      index: true,
+    },
     paymentReference: String,
     guestName: String,
     guestEmail: String,
+    specialRequests: String,
   },
   {
     timestamps: true,
@@ -81,6 +94,7 @@ const BookingSchema = new Schema<IBooking>(
 );
 
 BookingSchema.index({ user: 1, createdAt: -1 });
+BookingSchema.index({ user: 1, tour: 1, departureDate: 1, createdAt: -1 });
 
 export const Booking: Model<IBooking> =
   mongoose.models.Booking || mongoose.model<IBooking>("Booking", BookingSchema);

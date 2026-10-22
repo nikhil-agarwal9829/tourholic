@@ -4,9 +4,11 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, Compass, ArrowRight, AlertCircle } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +35,12 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/profile");
+      await refreshUser();
+      if (data.user?.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/profile");
+      }
       router.refresh();
     } catch {
       setErrorMessage("Network error during login. Please try again.");

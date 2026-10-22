@@ -105,6 +105,7 @@ export interface Booking {
   bookingReference: string;
   tour: Tour | string;
   user: User | string;
+  departureSchedule?: string;
   departureDate: string;
   travelers: number;
   pricePerTraveler: number;
@@ -112,6 +113,7 @@ export interface Booking {
   currency: string;
   bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
   paymentStatus: "unpaid" | "paid" | "failed" | "refunded";
+  paymentDueAt?: string;
   paymentReference?: string;
   guestName?: string;
   guestEmail?: string;

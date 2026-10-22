@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/jwt";
 import { connectToDatabase } from "@/lib/db/mongodb";
 import { User as UserModel } from "@/models/User";
+import "@/models/Tour"; // Ensure Tour schema is registered for favoriteTours population
 
 export async function GET() {
   try {
@@ -15,20 +16,24 @@ export async function GET() {
 
     const db = await connectToDatabase();
     if (db && session.userId && session.userId.match(/^[0-9a-fA-F]{24}$/)) {
-      const userDoc = await UserModel.findById(session.userId)
-        .select("-passwordHash")
-        .populate("favoriteTours", "name slug imageCover price duration ratingsAverage")
-        .lean();
+      try {
+        const userDoc = await UserModel.findById(session.userId)
+          .select("-passwordHash")
+          .populate("favoriteTours", "name slug imageCover price duration ratingsAverage")
+          .lean();
 
-      if (userDoc) {
-        return NextResponse.json({
-          status: "success",
-          user: userDoc,
-        });
+        if (userDoc) {
+          return NextResponse.json({
+            status: "success",
+            user: userDoc,
+          });
+        }
+      } catch (dbErr) {
+        console.warn("Could not fetch full userDoc in /api/auth/me, falling back to session:", dbErr);
       }
     }
 
-    // Demo/session fallback
+    // Session fallback ensures authenticated users are never unexpectedly logged out
     return NextResponse.json({
       status: "success",
       user: {

@@ -99,6 +99,11 @@ export default function MyBookingsPage() {
             {bookings.map((booking) => {
               const tour = booking.tour as Tour;
               const isCancelled = booking.bookingStatus === "cancelled";
+              const isOverdue =
+                Boolean(booking.paymentDueAt) &&
+                booking.paymentStatus === "unpaid" &&
+                !isCancelled &&
+                new Date(booking.paymentDueAt as string) < new Date();
 
               return (
                 <div
@@ -135,8 +140,15 @@ export default function MyBookingsPage() {
                         >
                           {booking.bookingStatus}
                         </span>
-                        <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          booking.paymentStatus === "paid"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : isOverdue
+                            ? "bg-rose-50 text-rose-800 border border-rose-200"
+                            : "bg-amber-50 text-amber-800 border border-amber-200"
+                        }`}>
                           {booking.paymentStatus}
+                          {isOverdue && " (Overdue)"}
                         </span>
                       </div>
 
@@ -163,6 +175,19 @@ export default function MyBookingsPage() {
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-[#124e3f]" />
                             <span>{tour.duration} Days</span>
+                          </div>
+                        )}
+                        {booking.paymentDueAt && booking.paymentStatus === "unpaid" && !isCancelled && (
+                          <div className={`flex items-center gap-1.5 font-medium ${isOverdue ? "text-rose-600" : "text-amber-700"}`}>
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>
+                              {isOverdue ? "Payment Overdue: " : "Payment Due: "}
+                              {new Date(booking.paymentDueAt).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
                           </div>
                         )}
                       </div>

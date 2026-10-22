@@ -4,9 +4,11 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, User, Compass, ArrowRight, AlertCircle, Check } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,6 +51,7 @@ export default function RegisterPage() {
         return;
       }
 
+      await refreshUser();
       router.push("/profile");
       router.refresh();
     } catch {

@@ -5,10 +5,9 @@ import { getSession } from "@/lib/auth/jwt";
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
-    // In production require admin session; in dev allow verified uploads
-    if (session && session.role !== "admin") {
+    if (!session || session.role !== "admin") {
       return NextResponse.json(
-        { status: "error", message: "Admin authorization required." },
+        { status: "error", message: "Administrator authorization required to upload expedition assets." },
         { status: 403 }
       );
     }

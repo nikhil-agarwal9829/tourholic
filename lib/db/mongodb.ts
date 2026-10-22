@@ -41,7 +41,13 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
       serverSelectionTimeoutMS: 5000,
     };
 
-    cached!.promise = mongoose.connect(MONGODB_URI as string, opts).then((mongooseInstance) => {
+    cached!.promise = mongoose.connect(MONGODB_URI as string, opts).then(async (mongooseInstance) => {
+      // Ensure all models are registered in Mongoose schema registry
+      await import("@/models/Tour");
+      await import("@/models/User");
+      await import("@/models/Booking");
+      await import("@/models/Review");
+      await import("@/models/TourDeparture");
       return mongooseInstance;
     });
   }
