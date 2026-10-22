@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { User, Lock, Calendar, Star, Compass, CheckCircle2, AlertCircle, Shield } from "lucide-react";
+import { User, Lock, Calendar, Star, Compass, CheckCircle2, AlertCircle, Shield, Sparkles, MapPin, Globe, Tag, DollarSign } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import PlanExpeditionModal from "@/components/preferences/PlanExpeditionModal";
+import { TravelPreferences } from "@/types";
 
 interface UserProfile {
   _id?: string;
@@ -12,6 +14,7 @@ interface UserProfile {
   email: string;
   role: string;
   photo?: string;
+  travelPreferences?: TravelPreferences;
 }
 
 export default function ProfilePage() {
@@ -22,7 +25,8 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "security">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "security" | "preferences">("profile");
+  const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -156,6 +160,17 @@ export default function ProfilePage() {
               Profile Settings
             </button>
             <button
+              onClick={() => setActiveTab("preferences")}
+              className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+                activeTab === "preferences"
+                  ? "border-[#124e3f] text-[#124e3f]"
+                  : "border-transparent text-stone-400 hover:text-stone-700"
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-[#d97706]" />
+              <span>Travel Preferences</span>
+            </button>
+            <button
               onClick={() => setActiveTab("security")}
               className={`pb-3 border-b-2 transition-colors ${
                 activeTab === "security"
@@ -184,74 +199,200 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <form onSubmit={handleUpdateProfile} className="space-y-6">
-            {activeTab === "profile" ? (
-              <div className="space-y-4">
+          {activeTab === "preferences" ? (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#fbfaf8] border border-[#e8e3d8]">
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
-                  />
+                  <h3 className="font-serif text-lg font-bold text-[#1c2421]">
+                    Your Bespoke Travel Blueprint
+                  </h3>
+                  <p className="text-xs text-stone-600 mt-1">
+                    Deterministic preferences used to surface matching journeys across India and the globe.
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPreferencesModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-[#124e3f] hover:bg-[#0c382d] text-white text-xs font-bold shadow-sm transition-colors shrink-0"
+                >
+                  Edit Travel Preferences
+                </button>
+              </div>
 
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
-                    Account Email
-                  </label>
-                  <input
-                    type="email"
-                    disabled
-                    value={profile.email}
-                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-stone-100 border border-[#e8e3d8] rounded-xl text-stone-500 cursor-not-allowed"
-                  />
-                  <span className="text-[11px] text-stone-400 mt-1 block">
-                    Account email is unique and verified.
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Home Location */}
+                <div className="p-4 rounded-xl border border-[#e8e3d8] bg-white space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>Home Location</span>
                   </span>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
-                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
-                  />
+                  <p className="text-sm font-semibold text-stone-800">
+                    {profile.travelPreferences?.homeCity || profile.travelPreferences?.homeCountry
+                      ? `${profile.travelPreferences?.homeCity || "Unknown City"}, ${
+                          profile.travelPreferences?.homeCountry || "Unknown Country"
+                        }`
+                      : "Not set yet"}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
-                    New Password (minimum 8 characters)
-                  </label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new strong password"
-                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
-                  />
+                {/* Scope */}
+                <div className="p-4 rounded-xl border border-[#e8e3d8] bg-white space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>Exploration Scope</span>
+                  </span>
+                  <p className="text-sm font-semibold text-stone-800 capitalize">
+                    {profile.travelPreferences?.destinationScope === "india"
+                      ? "India Exclusive"
+                      : profile.travelPreferences?.destinationScope === "international"
+                      ? "International Only"
+                      : "India & International"}
+                  </p>
+                </div>
+
+                {/* Preferred Destinations */}
+                <div className="p-4 rounded-xl border border-[#e8e3d8] bg-white space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                    <Compass className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>Target Destinations</span>
+                  </span>
+                  {profile.travelPreferences?.preferredDestinations &&
+                  profile.travelPreferences.preferredDestinations.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.travelPreferences.preferredDestinations.map((d) => (
+                        <span
+                          key={d}
+                          className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f4efe6] text-[#124e3f] border border-[#e5dccb]"
+                        >
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-500">No specific destinations selected</p>
+                  )}
+                </div>
+
+                {/* Preferred Categories */}
+                <div className="p-4 rounded-xl border border-[#e8e3d8] bg-white space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>Travel Styles</span>
+                  </span>
+                  {profile.travelPreferences?.preferredCategories &&
+                  profile.travelPreferences.preferredCategories.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.travelPreferences.preferredCategories.map((c) => (
+                        <span
+                          key={c}
+                          className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 capitalize"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-500">All travel categories welcome</p>
+                  )}
+                </div>
+
+                {/* Budget & Duration */}
+                <div className="p-4 rounded-xl border border-[#e8e3d8] bg-white space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                    <DollarSign className="w-3.5 h-3.5 text-[#124e3f]" />
+                    <span>Budget & Duration Preference</span>
+                  </span>
+                  <p className="text-sm font-semibold text-stone-800">
+                    {profile.travelPreferences?.maxBudget
+                      ? `Up to $${profile.travelPreferences.maxBudget}`
+                      : "Flexible budget"}
+                    {profile.travelPreferences?.preferredDuration
+                      ? ` · ${profile.travelPreferences.preferredDuration} days`
+                      : ""}
+                  </p>
                 </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              className="py-3 px-6 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-xs shadow-sm transition-colors"
-            >
-              Save Profile Changes
-            </button>
-          </form>
+              <PlanExpeditionModal
+                isOpen={isPreferencesModalOpen}
+                onClose={() => setIsPreferencesModalOpen(false)}
+                initialPreferences={profile.travelPreferences}
+                onSaved={async (updated) => {
+                  setProfile({ ...profile, travelPreferences: updated });
+                  await refreshUser();
+                }}
+              />
+            </div>
+          ) : (
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              {activeTab === "profile" ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
+                      Display Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
+                      Account Email
+                    </label>
+                    <input
+                      type="email"
+                      disabled
+                      value={profile.email}
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-stone-100 border border-[#e8e3d8] rounded-xl text-stone-500 cursor-not-allowed"
+                    />
+                    <span className="text-[11px] text-stone-400 mt-1 block">
+                      Account email is unique and verified.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-stone-600 block mb-1">
+                      New Password (minimum 8 characters)
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new strong password"
+                      className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="py-3 px-6 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-xs shadow-sm transition-colors"
+              >
+                Save Profile Changes
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

@@ -43,6 +43,12 @@ export default function Navbar() {
               Adventures
             </Link>
             <Link
+              href="/tours?country=India"
+              className="hover:text-[#124e3f] transition-colors font-medium text-[#124e3f]"
+            >
+              Explore India
+            </Link>
+            <Link
               href="/tours?category=cultural"
               className="hover:text-[#124e3f] transition-colors"
             >
@@ -125,6 +131,13 @@ export default function Navbar() {
             className="block px-3 py-2 rounded-lg text-base font-medium text-stone-800 hover:bg-[#f4efe6]"
           >
             Explore Tours
+          </Link>
+          <Link
+            href="/tours?country=India"
+            onClick={() => setIsOpen(false)}
+            className="block px-3 py-2 rounded-lg text-base font-medium text-[#124e3f] bg-emerald-50/60"
+          >
+            Explore India (12 Tours)
           </Link>
           <Link
             href="/tours?category=adventure"

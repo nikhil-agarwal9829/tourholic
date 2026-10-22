@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { TravelPreferences } from "@/types";
 
 export interface AuthUser {
   _id?: string;
@@ -10,6 +11,7 @@ export interface AuthUser {
   email: string;
   role: "user" | "admin";
   photo?: string;
+  travelPreferences?: TravelPreferences;
 }
 
 interface AuthContextType {

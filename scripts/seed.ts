@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import * as dotenv from "dotenv";
 import { SAMPLE_TOURS, SAMPLE_DEPARTURES, SAMPLE_REVIEWS } from "../lib/data/sample-tours";
+import { INDIAN_TOURS } from "../lib/data/indian-tours";
 import { Tour } from "../models/Tour";
 import { User } from "../models/User";
 import { Review } from "../models/Review";
@@ -49,13 +50,22 @@ async function seedDatabase() {
       role: "user",
       active: true,
       photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+      travelPreferences: {
+        homeCountry: "United States",
+        homeCity: "San Francisco",
+        preferredCountries: ["India"],
+        preferredDestinations: ["Mumbai", "Kashmir", "Varkala", "Kerala"],
+        preferredCategories: ["nature", "cultural"],
+        destinationScope: "india",
+        onboardingCompleted: true,
+      },
     },
     { upsert: true, new: true }
   );
 
   console.log(`Users verified: ${adminUser.email}, ${testUser.email}`);
 
-  console.log("Seeding tours...");
+  console.log("Seeding global sample tours...");
   const tourMap = new Map<string, mongoose.Types.ObjectId>();
 
   for (const tourData of SAMPLE_TOURS) {
@@ -67,9 +77,59 @@ async function seedDatabase() {
     );
     tourMap.set(_id, upsertedTour._id as mongoose.Types.ObjectId);
   }
-  console.log(`Successfully upserted ${SAMPLE_TOURS.length} tours.`);
+  console.log(`Successfully upserted ${SAMPLE_TOURS.length} sample tours.`);
 
-  console.log("Seeding departures and schedules...");
+  console.log("Seeding 12 Indian Tours...");
+  for (const tourData of INDIAN_TOURS) {
+    const { _id, ...tourDoc } = tourData;
+    const upsertedTour = await Tour.findOneAndUpdate(
+      { slug: tourDoc.slug },
+      { ...tourDoc },
+      { upsert: true, new: true }
+    );
+    tourMap.set(_id, upsertedTour._id as mongoose.Types.ObjectId);
+
+    // Seed realistic future departures for each Indian tour
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + 15);
+    const dep1Start = new Date(baseDate);
+    const dep1End = new Date(baseDate);
+    dep1End.setDate(dep1End.getDate() + tourDoc.duration);
+
+    const dep2Start = new Date(baseDate);
+    dep2Start.setDate(dep2Start.getDate() + 30);
+    const dep2End = new Date(dep2Start);
+    dep2End.setDate(dep2End.getDate() + tourDoc.duration);
+
+    await TourDeparture.findOneAndUpdate(
+      { tour: upsertedTour._id, startDate: dep1Start.toISOString().split("T")[0] },
+      {
+        tour: upsertedTour._id,
+        startDate: dep1Start.toISOString().split("T")[0],
+        endDate: dep1End.toISOString().split("T")[0],
+        capacity: tourDoc.maxGroupSize || 10,
+        reservedSeats: 0,
+        status: "open",
+      },
+      { upsert: true, new: true }
+    );
+
+    await TourDeparture.findOneAndUpdate(
+      { tour: upsertedTour._id, startDate: dep2Start.toISOString().split("T")[0] },
+      {
+        tour: upsertedTour._id,
+        startDate: dep2Start.toISOString().split("T")[0],
+        endDate: dep2End.toISOString().split("T")[0],
+        capacity: tourDoc.maxGroupSize || 10,
+        reservedSeats: 0,
+        status: "open",
+      },
+      { upsert: true, new: true }
+    );
+  }
+  console.log(`Successfully upserted 12 Indian tours with upcoming departures.`);
+
+  console.log("Seeding departures and schedules for sample tours...");
   for (const dep of SAMPLE_DEPARTURES) {
     const realTourId = tourMap.get(dep.tour);
     if (realTourId) {

@@ -3,6 +3,7 @@ import { Tour as TourModel } from "@/models/Tour";
 import { TourDeparture as TourDepartureModel } from "@/models/TourDeparture";
 import { Review as ReviewModel } from "@/models/Review";
 import { SAMPLE_TOURS, SAMPLE_DEPARTURES, SAMPLE_REVIEWS } from "@/lib/data/sample-tours";
+import { INDIAN_TOURS } from "@/lib/data/indian-tours";
 import { Tour, TourFilterParams, TourDeparture, Review } from "@/types";
 
 export interface TourQueryResult {
@@ -28,8 +29,11 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
         query.$or = [
           { name: { $regex: params.search, $options: "i" } },
           { destination: { $regex: params.search, $options: "i" } },
+          { city: { $regex: params.search, $options: "i" } },
+          { state: { $regex: params.search, $options: "i" } },
           { country: { $regex: params.search, $options: "i" } },
           { summary: { $regex: params.search, $options: "i" } },
+          { tags: { $regex: params.search, $options: "i" } },
         ];
       }
 
@@ -42,7 +46,13 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
       }
 
       if (params.destination && params.destination.trim()) {
-        query.destination = { $regex: params.destination, $options: "i" };
+        const destRegex = { $regex: params.destination.trim(), $options: "i" };
+        query.$or = [
+          { destination: destRegex },
+          { city: destRegex },
+          { state: destRegex },
+          { country: destRegex },
+        ];
       }
 
       if (params.minPrice || params.maxPrice) {
@@ -87,7 +97,7 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
   }
 
   // Graceful fallback to rich sample tours
-  let filtered = [...SAMPLE_TOURS];
+  let filtered = [...SAMPLE_TOURS, ...INDIAN_TOURS];
 
   if (params.search) {
     const q = params.search.toLowerCase();

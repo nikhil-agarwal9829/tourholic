@@ -52,7 +52,7 @@ export default function RegisterPage() {
       }
 
       await refreshUser();
-      router.push("/profile");
+      router.push("/onboarding");
       router.refresh();
     } catch {
       setErrorMessage("Network error during registration.");

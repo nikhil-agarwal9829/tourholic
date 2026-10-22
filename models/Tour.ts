@@ -5,7 +5,18 @@ export interface ITour extends Document {
   slug: string;
   summary: string;
   description: string;
-  category: "adventure" | "nature" | "cultural" | "beaches" | "getaway" | "wildlife";
+  category:
+    | "adventure"
+    | "nature"
+    | "cultural"
+    | "beaches"
+    | "getaway"
+    | "wildlife"
+    | "beach"
+    | "spiritual"
+    | "heritage"
+    | "relaxation"
+    | "city";
   duration: number;
   maxGroupSize: number;
   difficulty: "easy" | "medium" | "difficult";
@@ -48,6 +59,9 @@ export interface ITour extends Document {
   featured: boolean;
   destination: string;
   country: string;
+  state?: string;
+  city?: string;
+  tags?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,7 +94,19 @@ const TourSchema = new Schema<ITour>(
     category: {
       type: String,
       required: [true, "A tour must belong to a category"],
-      enum: ["adventure", "nature", "cultural", "beaches", "getaway", "wildlife"],
+      enum: [
+        "adventure",
+        "nature",
+        "cultural",
+        "beaches",
+        "getaway",
+        "wildlife",
+        "beach",
+        "spiritual",
+        "heritage",
+        "relaxation",
+        "city",
+      ],
       index: true,
     },
     duration: {
@@ -193,7 +219,22 @@ const TourSchema = new Schema<ITour>(
     country: {
       type: String,
       required: true,
+      index: true,
     },
+    state: {
+      type: String,
+      index: true,
+    },
+    city: {
+      type: String,
+      index: true,
+    },
+    tags: [
+      {
+        type: String,
+        index: true,
+      },
+    ],
   },
   {
     timestamps: true,
@@ -206,9 +247,13 @@ const TourSchema = new Schema<ITour>(
 // 1. startLocation 2dsphere index for geospatial discovery
 // 2. price & ratingsAverage compound index for price/rating filtering
 // 3. category & difficulty compound index for search filtering
+// 4. country, state, city index for destination matching
+// 5. ratingsAverage & ratingsQuantity index for top-rated queries
 TourSchema.index({ startLocation: "2dsphere" });
 TourSchema.index({ price: 1, ratingsAverage: -1 });
 TourSchema.index({ category: 1, difficulty: 1 });
+TourSchema.index({ country: 1, state: 1, city: 1 });
+TourSchema.index({ ratingsAverage: -1, ratingsQuantity: -1 });
 
 export const Tour: Model<ITour> =
   mongoose.models.Tour || mongoose.model<ITour>("Tour", TourSchema);

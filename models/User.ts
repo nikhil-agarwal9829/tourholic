@@ -8,6 +8,19 @@ export interface IUser extends Document {
   role: "user" | "admin";
   active: boolean;
   favoriteTours: mongoose.Types.ObjectId[];
+  travelPreferences?: {
+    homeCountry?: string;
+    homeCity?: string;
+    preferredCountries?: string[];
+    preferredDestinations?: string[];
+    preferredCategories?: string[];
+    destinationScope?: "india" | "international" | "both";
+    minBudget?: number;
+    maxBudget?: number;
+    preferredDuration?: number;
+    preferredTravelMonth?: number;
+    onboardingCompleted: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,6 +65,23 @@ const UserSchema = new Schema<IUser>(
         ref: "Tour",
       },
     ],
+    travelPreferences: {
+      homeCountry: { type: String, trim: true },
+      homeCity: { type: String, trim: true },
+      preferredCountries: [{ type: String, trim: true }],
+      preferredDestinations: [{ type: String, trim: true }],
+      preferredCategories: [{ type: String, trim: true }],
+      destinationScope: {
+        type: String,
+        enum: ["india", "international", "both"],
+        default: "both",
+      },
+      minBudget: { type: Number, min: 0 },
+      maxBudget: { type: Number, min: 0 },
+      preferredDuration: { type: Number, min: 1 },
+      preferredTravelMonth: { type: Number, min: 1, max: 12 },
+      onboardingCompleted: { type: Boolean, default: false },
+    },
   },
   {
     timestamps: true,

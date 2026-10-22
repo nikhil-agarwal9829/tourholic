@@ -1,5 +1,30 @@
 export type Difficulty = "easy" | "medium" | "difficult";
-export type TourCategory = "adventure" | "nature" | "cultural" | "beaches" | "getaway" | "wildlife";
+export type TourCategory =
+  | "adventure"
+  | "nature"
+  | "cultural"
+  | "beaches"
+  | "getaway"
+  | "wildlife"
+  | "beach"
+  | "spiritual"
+  | "heritage"
+  | "relaxation"
+  | "city";
+
+export interface TravelPreferences {
+  homeCountry?: string;
+  homeCity?: string;
+  preferredCountries?: string[];
+  preferredDestinations?: string[];
+  preferredCategories?: string[];
+  destinationScope?: "india" | "international" | "both";
+  minBudget?: number;
+  maxBudget?: number;
+  preferredDuration?: number;
+  preferredTravelMonth?: number; // 1-12
+  onboardingCompleted: boolean;
+}
 
 export interface ItineraryDay {
   day: number;
@@ -39,6 +64,7 @@ export interface Tour {
   ratingsAverage: number;
   ratingsQuantity: number;
   imageCover: string;
+  coverImagePublicId?: string;
   images: string[];
   startLocation: {
     description: string;
@@ -56,6 +82,9 @@ export interface Tour {
   featured?: boolean;
   destination: string;
   country: string;
+  state?: string;
+  city?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -81,6 +110,7 @@ export interface User {
   photo?: string;
   active: boolean;
   favoriteTours: string[]; // Tour IDs
+  travelPreferences?: TravelPreferences;
   createdAt: string;
   updatedAt?: string;
 }

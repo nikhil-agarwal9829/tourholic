@@ -38,6 +38,8 @@ export default function LoginPage() {
       await refreshUser();
       if (data.user?.role === "admin") {
         router.push("/admin");
+      } else if (!data.user?.travelPreferences?.onboardingCompleted) {
+        router.push("/onboarding");
       } else {
         router.push("/profile");
       }

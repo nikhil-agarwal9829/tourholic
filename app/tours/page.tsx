@@ -25,7 +25,7 @@ function ToursContent() {
   const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") || "");
   const [maxPrice, setMaxPrice] = useState(searchParams.get("maxPrice") || "");
   const [sort, setSort] = useState(searchParams.get("sort") || "newest");
-  const [destination] = useState(searchParams.get("destination") || "");
+  const [destination] = useState(searchParams.get("destination") || searchParams.get("country") || "");
 
   const hasActiveFilters = Boolean(
     search ||
