@@ -6,6 +6,7 @@ import { Review as ReviewModel } from "@/models/Review";
 import { SAMPLE_TOURS, SAMPLE_DEPARTURES, SAMPLE_REVIEWS } from "@/lib/data/sample-tours";
 import { INDIAN_TOURS } from "@/lib/data/indian-tours";
 import { Tour, TourFilterParams, TourDeparture, Review } from "@/types";
+import { resolveDestinationCoordinates, normalizeDestinationQuery } from "@/lib/geo/destinations";
 
 export interface TourQueryResult {
   tours: Tour[];
@@ -27,15 +28,31 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
       const query: Record<string, unknown> = { isPublished: true };
 
       if (params.search) {
-        query.$or = [
-          { name: { $regex: params.search, $options: "i" } },
-          { destination: { $regex: params.search, $options: "i" } },
-          { city: { $regex: params.search, $options: "i" } },
-          { state: { $regex: params.search, $options: "i" } },
-          { country: { $regex: params.search, $options: "i" } },
-          { summary: { $regex: params.search, $options: "i" } },
-          { tags: { $regex: params.search, $options: "i" } },
-        ];
+        const rawSearch = params.search.trim();
+        const norm = normalizeDestinationQuery(rawSearch);
+        const searchRegex = { $regex: rawSearch, $options: "i" };
+        const normRegex = norm ? { $regex: norm, $options: "i" } : searchRegex;
+
+        const resolvedSearch = resolveDestinationCoordinates(rawSearch);
+        if (resolvedSearch && resolvedSearch.type !== "country") {
+          query.$or = [
+            { destination: normRegex },
+            { city: normRegex },
+            { state: normRegex },
+            { name: searchRegex },
+            { summary: searchRegex },
+          ];
+        } else {
+          query.$or = [
+            { name: searchRegex },
+            { destination: searchRegex },
+            { city: searchRegex },
+            { state: searchRegex },
+            { country: searchRegex },
+            { summary: searchRegex },
+            { tags: searchRegex },
+          ];
+        }
       }
 
       if (params.category && params.category !== "all") {
@@ -47,13 +64,27 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
       }
 
       if (params.destination && params.destination.trim()) {
-        const destRegex = { $regex: params.destination.trim(), $options: "i" };
-        query.$or = [
-          { destination: destRegex },
-          { city: destRegex },
-          { state: destRegex },
-          { country: destRegex },
-        ];
+        const rawDest = params.destination.trim();
+        const norm = normalizeDestinationQuery(rawDest);
+        const resolved = resolveDestinationCoordinates(rawDest);
+
+        if (
+          resolved?.type === "country" ||
+          (!resolved &&
+            /^(india|japan|peru|nepal|switzerland|italy|canada|turkey|tanzania|argentina|morocco|new zealand)$/i.test(
+              rawDest
+            ))
+        ) {
+          query.country = { $regex: norm || rawDest, $options: "i" };
+        } else {
+          const target = norm || rawDest;
+          const targetRegex = { $regex: target, $options: "i" };
+          query.$or = [
+            { destination: targetRegex },
+            { city: targetRegex },
+            { state: targetRegex },
+          ];
+        }
       }
 
       if (params.minPrice || params.maxPrice) {
@@ -83,15 +114,13 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
         TourModel.find(query).sort(sortOption).skip(skip).limit(limit).lean(),
       ]);
 
-      if (tours.length > 0) {
-        return {
-          tours: JSON.parse(JSON.stringify(tours)),
-          total,
-          page,
-          totalPages: Math.ceil(total / limit),
-          isLiveDatabase: true,
-        };
-      }
+      return {
+        tours: JSON.parse(JSON.stringify(tours)),
+        total,
+        page,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        isLiveDatabase: true,
+      };
     } catch (err) {
       console.warn("DB query fallback to sample data:", err);
     }
@@ -120,12 +149,28 @@ export async function getTours(params: TourFilterParams = {}): Promise<TourQuery
   }
 
   if (params.destination && params.destination.trim()) {
-    const q = params.destination.toLowerCase();
-    filtered = filtered.filter(
-      (t) =>
-        t.destination.toLowerCase().includes(q) ||
-        t.country.toLowerCase().includes(q)
-    );
+    const rawDest = params.destination.trim();
+    const norm = normalizeDestinationQuery(rawDest);
+    const resolved = resolveDestinationCoordinates(rawDest);
+    if (
+      resolved?.type === "country" ||
+      (!resolved &&
+        /^(india|japan|peru|nepal|switzerland|italy|canada|turkey|tanzania|argentina|morocco|new zealand)$/i.test(
+          rawDest
+        ))
+    ) {
+      filtered = filtered.filter((t) =>
+        t.country.toLowerCase().includes((norm || rawDest).toLowerCase())
+      );
+    } else {
+      const target = (norm || rawDest).toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.destination.toLowerCase().includes(target) ||
+          (t.city && t.city.toLowerCase().includes(target)) ||
+          (t.state && t.state.toLowerCase().includes(target))
+      );
+    }
   }
 
   if (params.minPrice) {

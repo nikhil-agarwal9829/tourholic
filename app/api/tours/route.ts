@@ -23,6 +23,9 @@ const createTourSchema = z.object({
   excluded: z.array(z.string()).optional(),
 });
 
+import { resolveDestinationCoordinates } from "@/lib/geo/destinations";
+import { getNearbyTours, getBestForYouTours } from "@/lib/geo/nearby";
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -41,6 +44,35 @@ export async function GET(request: NextRequest) {
     };
 
     const result = await getTours(params);
+
+    let nearby: any[] = [];
+    let bestForYou: any[] = [];
+    let resolvedDestination = null;
+
+    const searchedDest = (params.destination || params.search || "").trim();
+    if (result.total === 0 && searchedDest) {
+      resolvedDestination = resolveDestinationCoordinates(searchedDest);
+
+      if (resolvedDestination) {
+        const nearbyResult = await getNearbyTours({
+          coordinates: resolvedDestination.coordinates,
+          searchedDestination: resolvedDestination.name,
+          category: params.category,
+          difficulty: params.difficulty,
+          limit: 6,
+        });
+        nearby = nearbyResult.tours;
+
+        const excludeIds = nearby.map((t) => (t._id ? String(t._id) : "")).filter(Boolean);
+        bestForYou = await getBestForYouTours({
+          limit: 6,
+          excludeTourIds: excludeIds,
+        });
+      } else {
+        bestForYou = await getBestForYouTours({ limit: 6 });
+      }
+    }
+
     return NextResponse.json({
       status: "success",
       data: result.tours,
@@ -50,6 +82,11 @@ export async function GET(request: NextRequest) {
         totalPages: result.totalPages,
         isLiveDatabase: result.isLiveDatabase,
       },
+      noExactMatch: result.total === 0 && Boolean(searchedDest),
+      searchedDestination: searchedDest || null,
+      resolvedDestination,
+      nearby,
+      bestForYou,
     });
   } catch (error) {
     console.error("GET /api/tours error:", error);
@@ -61,6 +98,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let requestBody: unknown = null;
   try {
     const session = await getSession();
     if (!session || session.role !== "admin") {
@@ -71,6 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    requestBody = body;
     const validated = createTourSchema.safeParse(body);
 
     if (!validated.success) {
@@ -107,6 +146,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "success", data: newTour }, { status: 201 });
   } catch (error: unknown) {
     console.error("POST /api/tours error:", error);
+
+    // Asset cleanup: if cover image was uploaded but tour creation failed, clean up Cloudinary asset
+    if (typeof requestBody === "object" && requestBody !== null && "coverImagePublicId" in requestBody) {
+      const publicId = (requestBody as { coverImagePublicId?: string }).coverImagePublicId;
+      if (publicId) {
+        try {
+          const { deleteImage } = await import("@/lib/images/cloudinary");
+          await deleteImage(publicId);
+        } catch (cleanupErr) {
+          console.warn("Failed to delete orphaned Cloudinary asset:", cleanupErr);
+        }
+      }
+    }
+
     const err = error as { code?: number };
     if (err.code === 11000) {
       return NextResponse.json(

@@ -21,12 +21,18 @@ if (!cached) {
 /**
  * Returns true if a valid MongoDB connection string is provided in env.
  */
+function getMongoUri(): string | undefined {
+  return process.env.MONGODB_URI;
+}
+
 export function isMongoConfigured(): boolean {
-  return Boolean(MONGODB_URI && MONGODB_URI.trim().startsWith("mongodb"));
+  const uri = getMongoUri();
+  return Boolean(uri && uri.trim().startsWith("mongodb"));
 }
 
 export async function connectToDatabase(): Promise<typeof mongoose | null> {
-  if (!isMongoConfigured()) {
+  const uri = getMongoUri();
+  if (!uri || !isMongoConfigured()) {
     return null;
   }
 
@@ -41,7 +47,7 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
       serverSelectionTimeoutMS: 5000,
     };
 
-    cached!.promise = mongoose.connect(MONGODB_URI as string, opts).then(async (mongooseInstance) => {
+    cached!.promise = mongoose.connect(uri, opts).then(async (mongooseInstance) => {
       // Ensure all models are registered in Mongoose schema registry
       await import("@/models/Tour");
       await import("@/models/User");

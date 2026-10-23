@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import TourCard from "@/components/tours/TourCard";
 import TourFilterSidebar from "@/components/tours/TourFilterSidebar";
 import { Tour } from "@/types";
-import { Compass, Filter, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Compass, Filter, X, ChevronLeft, ChevronRight, MapPin, Star } from "lucide-react";
 
 function ToursContent() {
   const searchParams = useSearchParams();
@@ -17,6 +17,12 @@ function ToursContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
+  // Recommendations state when exact matches are 0
+  const [nearbyTours, setNearbyTours] = useState<(Tour & { distanceKm: number })[]>([]);
+  const [bestForYouTours, setBestForYouTours] = useState<Tour[]>([]);
+  const [noExactMatch, setNoExactMatch] = useState(false);
+  const [searchedDestinationName, setSearchedDestinationName] = useState("");
+
   // Filter States
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [category, setCategory] = useState(searchParams.get("category") || "all");
@@ -25,7 +31,9 @@ function ToursContent() {
   const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") || "");
   const [maxPrice, setMaxPrice] = useState(searchParams.get("maxPrice") || "");
   const [sort, setSort] = useState(searchParams.get("sort") || "newest");
-  const [destination] = useState(searchParams.get("destination") || searchParams.get("country") || "");
+  const [destination, setDestination] = useState(
+    searchParams.get("destination") || searchParams.get("country") || ""
+  );
 
   const hasActiveFilters = Boolean(
     search ||
@@ -40,6 +48,7 @@ function ToursContent() {
 
   const handleClearFilters = () => {
     setSearch("");
+    setDestination("");
     setCategory("all");
     setDifficulty("all");
     setDuration("all");
@@ -47,6 +56,9 @@ function ToursContent() {
     setMaxPrice("");
     setSort("newest");
     setPage(1);
+    setNoExactMatch(false);
+    setNearbyTours([]);
+    setBestForYouTours([]);
   };
 
   useEffect(() => {
@@ -72,6 +84,10 @@ function ToursContent() {
           setTours(data.data || []);
           setTotal(data.meta?.total || 0);
           setTotalPages(data.meta?.totalPages || 1);
+          setNoExactMatch(Boolean(data.noExactMatch));
+          setSearchedDestinationName(data.searchedDestination || destination || search);
+          setNearbyTours(data.nearby || []);
+          setBestForYouTours(data.bestForYou || []);
         }
       })
       .catch((err) => console.error("Error loading tours:", err))
@@ -125,6 +141,12 @@ function ToursContent() {
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-[#f4efe6] text-stone-800 border border-[#e2dcce]">
                 &ldquo;{search}&rdquo;
                 <button onClick={() => setSearch("")}><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {destination && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-[#f4efe6] text-stone-800 border border-[#e2dcce]">
+                Destination: {destination}
+                <button onClick={() => setDestination("")}><X className="w-3 h-3" /></button>
               </span>
             )}
             {category !== "all" && (
@@ -184,7 +206,7 @@ function ToursContent() {
             />
           </div>
 
-          {/* Tour Cards Grid */}
+          {/* Tour Cards Grid / Recommendation Sections */}
           <div className="lg:col-span-3 space-y-8">
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -200,6 +222,92 @@ function ToursContent() {
                     <div className="h-10 bg-stone-100 rounded-xl mt-4" />
                   </div>
                 ))}
+              </div>
+            ) : noExactMatch && (nearbyTours.length > 0 || bestForYouTours.length > 0) ? (
+              <div className="space-y-12">
+                {/* Destination Notice Card */}
+                <div className="rounded-2xl border border-amber-200/90 bg-[#fefaf3] p-6 sm:p-8 travel-card-shadow">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-800">
+                        <MapPin className="w-4 h-4 text-amber-600" />
+                        <span>Destination Notice</span>
+                      </div>
+                      <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1c2421]">
+                        No tours available in {searchedDestinationName || "this destination"} right now.
+                      </h2>
+                      <p className="text-sm text-stone-600">
+                        Here are some nearby destinations you could explore instead.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleClearFilters}
+                      className="self-start sm:self-center shrink-0 px-4 py-2.5 rounded-xl border border-[#e8e3d8] bg-white hover:bg-stone-50 text-xs font-semibold text-stone-800 transition-colors shadow-xs"
+                    >
+                      Clear Destination Filter
+                    </button>
+                  </div>
+                </div>
+
+                {/* Nearby Destinations Section */}
+                {nearbyTours.length > 0 && (
+                  <section className="space-y-6">
+                    <div>
+                      <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#124e3f]">
+                        <Compass className="w-4 h-4" />
+                        <span>Explore nearby destinations</span>
+                      </div>
+                      <h3 className="font-serif text-2xl font-bold text-[#1c2421] mt-1">
+                        Expeditions Near {searchedDestinationName}
+                      </h3>
+                      <p className="text-xs text-stone-600 mt-1">
+                        Discovered through MongoDB 2dsphere geospatial search, sorted primarily by distance and real reviews.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {nearbyTours.map((tour) => (
+                        <TourCard
+                          key={tour._id}
+                          tour={tour}
+                          distanceKm={tour.distanceKm}
+                          searchedOrigin={searchedDestinationName}
+                          showBookNowButton={true}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Best for You Section */}
+                {bestForYouTours.length > 0 && (
+                  <section className="space-y-6 pt-6 border-t border-[#e8e3d8]">
+                    <div>
+                      <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-700">
+                        <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                        <span>Best for You</span>
+                      </div>
+                      <h3 className="font-serif text-2xl font-bold text-[#1c2421] mt-1">
+                        Top-Rated Expeditions
+                      </h3>
+                      <p className="text-xs text-stone-600 mt-1">
+                        Recommended based on verified ratings and genuine traveler reviews across our entire catalog.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {bestForYouTours.map((tour) => (
+                        <TourCard
+                          key={tour._id}
+                          tour={tour}
+                          reason="Highest Rated"
+                          showBookNowButton={true}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             ) : tours.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-[#e8e3d8] travel-card-shadow max-w-lg mx-auto">
@@ -226,7 +334,7 @@ function ToursContent() {
             )}
 
             {/* Pagination */}
-            {totalPages > 1 && (
+            {!noExactMatch && totalPages > 1 && (
               <div className="pt-8 border-t border-[#e8e3d8] flex items-center justify-between">
                 <button
                   disabled={page <= 1}

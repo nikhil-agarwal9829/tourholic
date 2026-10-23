@@ -33,6 +33,12 @@ export interface ITour extends Document {
     description: string;
     address?: string;
   };
+  location?: {
+    type: string;
+    coordinates: number[]; // [longitude, latitude]
+    description?: string;
+    address?: string;
+  };
   locations: Array<{
     type: string;
     coordinates: number[];
@@ -141,7 +147,7 @@ const TourSchema = new Schema<ITour>(
     ratingsAverage: {
       type: Number,
       default: 4.5,
-      min: [1, "Rating must be above 1.0"],
+      min: [0, "Rating cannot be negative"],
       max: [5, "Rating must be below 5.0"],
       set: (val: number) => Math.round(val * 10) / 10,
       index: true,
@@ -157,6 +163,16 @@ const TourSchema = new Schema<ITour>(
     coverImagePublicId: String,
     images: [String],
     startLocation: {
+      type: {
+        type: String,
+        default: "Point",
+        enum: ["Point"],
+      },
+      coordinates: [Number], // [longitude, latitude]
+      description: String,
+      address: String,
+    },
+    location: {
       type: {
         type: String,
         default: "Point",
@@ -243,12 +259,32 @@ const TourSchema = new Schema<ITour>(
   }
 );
 
+// Synchronize location and startLocation before validation/save
+TourSchema.pre("validate", function () {
+  if (this.startLocation?.coordinates?.length === 2 && (!this.location || !this.location.coordinates?.length)) {
+    this.location = {
+      type: "Point",
+      coordinates: this.startLocation.coordinates,
+      description: this.startLocation.description,
+      address: this.startLocation.address,
+    };
+  } else if (this.location?.coordinates?.length === 2 && (!this.startLocation || !this.startLocation.coordinates?.length)) {
+    this.startLocation = {
+      type: "Point",
+      coordinates: this.location.coordinates,
+      description: this.location.description || this.destination || "Tour Starting Location",
+      address: this.location.address,
+    };
+  }
+});
+
 // Indexes documented:
-// 1. startLocation 2dsphere index for geospatial discovery
+// 1. location & startLocation 2dsphere indexes for geospatial discovery ($near & $geoNear)
 // 2. price & ratingsAverage compound index for price/rating filtering
 // 3. category & difficulty compound index for search filtering
 // 4. country, state, city index for destination matching
 // 5. ratingsAverage & ratingsQuantity index for top-rated queries
+TourSchema.index({ location: "2dsphere" });
 TourSchema.index({ startLocation: "2dsphere" });
 TourSchema.index({ price: 1, ratingsAverage: -1 });
 TourSchema.index({ category: 1, difficulty: 1 });

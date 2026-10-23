@@ -71,6 +71,13 @@ export interface Tour {
     coordinates: [number, number];
     address?: string;
   };
+  location?: {
+    type: "Point";
+    coordinates: [number, number];
+    description?: string;
+    address?: string;
+  };
+  distanceKm?: number;
   locations?: GeoLocation[];
   guides?: TourGuide[];
   itinerary: ItineraryDay[];

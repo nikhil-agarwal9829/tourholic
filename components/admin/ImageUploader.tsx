@@ -87,6 +87,13 @@ export default function ImageUploader({
   };
 
   const handleReset = () => {
+    const currentPublicId = publicId;
+    if (currentPublicId) {
+      fetch(`/api/upload?publicId=${encodeURIComponent(currentPublicId)}`, {
+        method: "DELETE",
+      }).catch((err) => console.warn("Failed to clean up removed photo:", err));
+    }
+
     setPreviewUrl("");
     setPublicId("");
     setUploadSuccess(false);

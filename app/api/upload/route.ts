@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadImage } from "@/lib/images/cloudinary";
+import { uploadImage, deleteImage, sanitizeCloudinaryError } from "@/lib/images/cloudinary";
 import { getSession } from "@/lib/auth/jwt";
+import { connectToDatabase } from "@/lib/db/mongodb";
+import { Tour as TourModel } from "@/models/Tour";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,9 +57,60 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("POST /api/upload error:", error);
-    const err = error as { message?: string };
+    const safeMessage = sanitizeCloudinaryError(error);
     return NextResponse.json(
-      { status: "error", message: err.message || "Image upload failed." },
+      { status: "error", message: safeMessage },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json(
+        { status: "error", message: "Administrator authorization required." },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const publicId = searchParams.get("publicId");
+
+    if (!publicId) {
+      return NextResponse.json(
+        { status: "error", message: "publicId parameter is required." },
+        { status: 400 }
+      );
+    }
+
+    // Protect assets currently in use by active tours
+    const db = await connectToDatabase();
+    if (db) {
+      const activeTour = await TourModel.findOne({
+        $or: [
+          { coverImagePublicId: publicId },
+          { imageCover: { $regex: publicId } },
+        ],
+      });
+      if (activeTour) {
+        return NextResponse.json(
+          {
+            status: "error",
+            message: "Cannot delete asset currently linked to an active tour expedition.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const deleted = await deleteImage(publicId);
+    return NextResponse.json({ status: "success", deleted });
+  } catch (error: unknown) {
+    console.error("DELETE /api/upload error:", error);
+    return NextResponse.json(
+      { status: "error", message: sanitizeCloudinaryError(error) },
       { status: 500 }
     );
   }

@@ -8,15 +8,32 @@ import { formatPrice } from "@/lib/utils";
 interface TourCardProps {
   tour: Tour;
   reason?: string;
+  distanceKm?: number;
+  searchedOrigin?: string;
+  showBookNowButton?: boolean;
 }
 
-export default function TourCard({ tour, reason }: TourCardProps) {
+export default function TourCard({
+  tour,
+  reason,
+  distanceKm,
+  searchedOrigin,
+  showBookNowButton = true,
+}: TourCardProps) {
   const difficultyColor =
     tour.difficulty === "easy"
       ? "bg-emerald-50 text-emerald-800 border-emerald-200"
       : tour.difficulty === "medium"
       ? "bg-amber-50 text-amber-800 border-amber-200"
       : "bg-rose-50 text-rose-800 border-rose-200";
+
+  const effectiveDistance = distanceKm ?? tour.distanceKm;
+
+  // Build actual geographic destination string
+  const actualLocationParts = [tour.city, tour.state || tour.destination, tour.country].filter(
+    (item, index, self) => Boolean(item) && self.indexOf(item) === index
+  );
+  const locationLabel = actualLocationParts.length > 0 ? actualLocationParts.join(", ") : `${tour.destination}, ${tour.country}`;
 
   return (
     <div className="group bg-white rounded-2xl overflow-hidden border border-[#e8e3d8] travel-card-shadow hover:travel-card-shadow-hover transition-all duration-300 flex flex-col h-full">
@@ -50,6 +67,14 @@ export default function TourCard({ tour, reason }: TourCardProps) {
           </div>
         )}
 
+        {/* Distance Badge on Image if available */}
+        {effectiveDistance !== undefined && (
+          <div className="absolute bottom-3.5 left-3.5 z-10 flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#124e3f]/90 backdrop-blur-md text-white text-xs font-semibold shadow-md">
+            <MapPin className="w-3.5 h-3.5 text-emerald-300" />
+            <span>~{Math.round(effectiveDistance)} km away</span>
+          </div>
+        )}
+
         {/* Rating Floating Pill: 'New' if 0 reviews, else genuine rating & count */}
         <div className="absolute bottom-3.5 right-3.5 z-10 flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md text-white text-xs font-semibold">
           {tour.ratingsQuantity > 0 ? (
@@ -68,11 +93,18 @@ export default function TourCard({ tour, reason }: TourCardProps) {
       <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
         <div className="space-y-2">
           {/* Destination */}
-          <div className="flex items-center gap-1.5 text-xs font-medium text-stone-500">
-            <MapPin className="w-3.5 h-3.5 text-[#124e3f]" />
-            <span>
-              {tour.destination}, {tour.country}
-            </span>
+          <div className="flex items-center justify-between text-xs font-medium text-stone-500">
+            <div className="flex items-center gap-1.5 truncate">
+              <MapPin className="w-3.5 h-3.5 text-[#124e3f] shrink-0" />
+              <span className="truncate" title={locationLabel}>
+                {locationLabel}
+              </span>
+            </div>
+            {effectiveDistance !== undefined && (
+              <span className="text-[11px] font-semibold text-[#124e3f] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0 ml-2">
+                ~{Math.round(effectiveDistance)} km
+              </span>
+            )}
           </div>
 
           {/* Title */}
@@ -121,13 +153,26 @@ export default function TourCard({ tour, reason }: TourCardProps) {
             </div>
           </div>
 
-          <Link
-            href={`/tours/${tour.slug}`}
-            className="w-10 h-10 rounded-xl bg-[#f4efe6] group-hover:bg-[#124e3f] group-hover:text-white text-[#124e3f] flex items-center justify-center transition-all duration-300"
-            aria-label={`View details for ${tour.name}`}
-          >
-            <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          </Link>
+          <div className="flex items-center gap-2">
+            {showBookNowButton ? (
+              <Link
+                href={`/tours/${tour.slug}`}
+                className="px-3.5 py-2 rounded-xl bg-[#124e3f] hover:bg-[#0c382d] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1"
+                aria-label={`Book ${tour.name}`}
+              >
+                <span>Book Now</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <Link
+                href={`/tours/${tour.slug}`}
+                className="w-10 h-10 rounded-xl bg-[#f4efe6] group-hover:bg-[#124e3f] group-hover:text-white text-[#124e3f] flex items-center justify-center transition-all duration-300"
+                aria-label={`View details for ${tour.name}`}
+              >
+                <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>
