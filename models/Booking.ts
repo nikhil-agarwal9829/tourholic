@@ -11,9 +11,23 @@ export interface IBooking extends Document {
   totalPrice: number;
   currency: string;
   bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
-  paymentStatus: "unpaid" | "paid" | "failed" | "refunded";
+  paymentStatus: "unpaid" | "pending" | "paid" | "failed" | "refunded" | "partially_refunded";
   paymentDueAt: Date;
   paymentReference?: string;
+  paymentMethod?: string;
+  paidAt?: Date;
+  paymentReconciledBy?: mongoose.Types.ObjectId;
+  paymentReconciledAt?: Date;
+  paymentReconciliationNotes?: string;
+  cancelledAt?: Date;
+  cancelledBy?: mongoose.Types.ObjectId;
+  cancellationReason?: string;
+  cancellationPolicySnapshot?: string;
+  refundAmount?: number;
+  refundedAt?: Date;
+  refundReason?: string;
+  lastPaymentReminderSentAt?: Date;
+  paymentReminderCount?: number;
   guestName?: string;
   guestEmail?: string;
   specialRequests?: string;
@@ -74,7 +88,7 @@ const BookingSchema = new Schema<IBooking>(
     },
     paymentStatus: {
       type: String,
-      enum: ["unpaid", "paid", "failed", "refunded"],
+      enum: ["unpaid", "pending", "paid", "failed", "refunded", "partially_refunded"],
       default: "unpaid",
       index: true,
     },
@@ -84,6 +98,32 @@ const BookingSchema = new Schema<IBooking>(
       index: true,
     },
     paymentReference: String,
+    paymentMethod: String,
+    paidAt: Date,
+    paymentReconciledBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    paymentReconciledAt: Date,
+    paymentReconciliationNotes: String,
+    cancelledAt: Date,
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    cancellationReason: String,
+    cancellationPolicySnapshot: String,
+    refundAmount: {
+      type: Number,
+      default: 0,
+    },
+    refundedAt: Date,
+    refundReason: String,
+    lastPaymentReminderSentAt: Date,
+    paymentReminderCount: {
+      type: Number,
+      default: 0,
+    },
     guestName: String,
     guestEmail: String,
     specialRequests: String,
@@ -95,6 +135,10 @@ const BookingSchema = new Schema<IBooking>(
 
 BookingSchema.index({ user: 1, createdAt: -1 });
 BookingSchema.index({ user: 1, tour: 1, departureDate: 1, createdAt: -1 });
+BookingSchema.index({ bookingStatus: 1, paymentStatus: 1 });
+BookingSchema.index({ paymentDueAt: 1, paymentStatus: 1, bookingStatus: 1 });
+BookingSchema.index({ departureDate: 1 });
+BookingSchema.index({ createdAt: -1 });
 
 export const Booking: Model<IBooking> =
   mongoose.models.Booking || mongoose.model<IBooking>("Booking", BookingSchema);

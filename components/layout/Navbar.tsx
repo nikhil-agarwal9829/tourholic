@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { Compass, Menu, X, User as UserIcon, Calendar, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import NotificationMenu from "@/components/notifications/NotificationMenu";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -62,13 +63,22 @@ export default function Navbar() {
               My Bookings
             </Link>
             {user?.role === "admin" && (
-              <Link
-                href="/admin"
-                className="text-[#124e3f] bg-[#eef7f4] border border-[#124e3f]/20 px-2.5 py-1 rounded-md flex items-center gap-1 font-semibold text-xs"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Admin
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/admin"
+                  className="text-[#124e3f] bg-[#eef7f4] border border-[#124e3f]/20 px-2.5 py-1 rounded-md flex items-center gap-1 font-semibold text-xs hover:bg-[#d8efe8] transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Analytics
+                </Link>
+                <Link
+                  href="/admin/bookings"
+                  className="text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 px-2.5 py-1 rounded-md flex items-center gap-1 font-semibold text-xs transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-stone-600" />
+                  Bookings
+                </Link>
+              </div>
             )}
           </div>
 
@@ -76,6 +86,7 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
               <div className="flex items-center gap-3">
+                <NotificationMenu />
                 <Link
                   href="/profile"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f4efe6] hover:bg-[#ede6da] text-[#1c2421] text-xs font-medium transition-colors border border-[#e2dcce]"
@@ -111,6 +122,7 @@ export default function Navbar() {
 
           {/* Mobile Menu Toggle */}
           <div className="md:hidden flex items-center gap-2">
+            {user && <NotificationMenu />}
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="p-2 rounded-lg text-stone-700 hover:bg-stone-100 focus:outline-none"

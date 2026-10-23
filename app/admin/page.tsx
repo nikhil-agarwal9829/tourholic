@@ -6,6 +6,7 @@ import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import ImageUploader from "@/components/admin/ImageUploader";
+import RevenueAnalyticsDashboard from "@/components/admin/RevenueAnalyticsDashboard";
 import {
   Compass,
   Users,
@@ -309,6 +310,14 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/admin/bookings"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold border border-stone-300 transition-colors shadow-xs"
+            >
+              <Calendar className="w-4 h-4 text-[#124e3f]" />
+              <span>Manage Reservations</span>
+            </Link>
+
             <button
               onClick={() => fetchStats()}
               className="p-2.5 rounded-xl border border-[#e8e3d8] bg-white hover:bg-stone-50 text-stone-600 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
@@ -391,6 +400,9 @@ export default function AdminDashboardPage() {
             </span>
           </div>
         </div>
+
+        {/* Financial Analytics & Revenue Reporting Section */}
+        <RevenueAnalyticsDashboard />
 
         {/* Recent Reservations Table */}
         <div className="bg-white rounded-2xl border border-[#e8e3d8] travel-card-shadow overflow-hidden">
