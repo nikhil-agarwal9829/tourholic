@@ -6,17 +6,29 @@ import { getSession } from "@/lib/auth/jwt";
 import { z } from "zod";
 
 const createTourSchema = z.object({
-  name: z.string().min(3).max(100),
-  summary: z.string().min(10),
-  description: z.string().min(20),
-  category: z.enum(["adventure", "nature", "cultural", "beaches", "getaway", "wildlife"]),
-  duration: z.number().min(1),
-  maxGroupSize: z.number().min(1),
+  name: z.string().min(3, "Expedition title must be at least 3 characters").max(100, "Title must be at most 100 characters"),
+  summary: z.string().min(10, "Summary must be at least 10 characters"),
+  description: z.string().min(20, "Description overview must be at least 20 characters"),
+  category: z.enum([
+    "adventure",
+    "nature",
+    "cultural",
+    "beaches",
+    "getaway",
+    "wildlife",
+    "beach",
+    "spiritual",
+    "heritage",
+    "relaxation",
+    "city",
+  ]),
+  duration: z.number().min(1, "Duration must be at least 1 day"),
+  maxGroupSize: z.number().min(1, "Group size must be at least 1"),
   difficulty: z.enum(["easy", "medium", "difficult"]),
-  price: z.number().min(1),
-  destination: z.string().min(2),
-  country: z.string().min(2),
-  imageCover: z.string().url("Valid image URL is required"),
+  price: z.number().min(1, "Price must be greater than 0"),
+  destination: z.string().min(2, "Destination city/region must be at least 2 characters"),
+  country: z.string().min(2, "Country must be at least 2 characters"),
+  imageCover: z.string().url("Valid cover image URL is required"),
   coverImagePublicId: z.string().optional(),
   highlights: z.array(z.string()).optional(),
   included: z.array(z.string()).optional(),
@@ -101,9 +113,16 @@ export async function POST(request: NextRequest) {
   let requestBody: unknown = null;
   try {
     const session = await getSession();
-    if (!session || session.role !== "admin") {
+    if (!session) {
       return NextResponse.json(
-        { status: "error", message: "Unauthorized. Admin privileges required." },
+        { status: "error", message: "Authentication required. Please log in as an administrator." },
+        { status: 401 }
+      );
+    }
+
+    if (session.role !== "admin") {
+      return NextResponse.json(
+        { status: "error", message: "Unauthorized. Administrator privileges are required to publish an expedition." },
         { status: 403 }
       );
     }
@@ -113,8 +132,13 @@ export async function POST(request: NextRequest) {
     const validated = createTourSchema.safeParse(body);
 
     if (!validated.success) {
+      const formattedErrors = validated.error.issues.map((i) => i.message).join(". ");
       return NextResponse.json(
-        { status: "error", message: "Validation error", errors: validated.error.issues },
+        {
+          status: "error",
+          message: formattedErrors || "Validation error in tour data.",
+          errors: validated.error.issues,
+        },
         { status: 400 }
       );
     }
@@ -124,16 +148,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           status: "error",
-          message: "Database connection unavailable. Please configure MONGODB_URI to persist tours.",
+          message: "Database connection unavailable. Please verify MONGODB_URI to persist tours.",
         },
         { status: 503 }
       );
     }
 
-    const slug = validated.data.name
+    // Auto-generate stable unique slug and resolve any collisions
+    let baseSlug = validated.data.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)+/g, "");
+    if (!baseSlug) baseSlug = "expedition";
+
+    let slug = baseSlug;
+    let counter = 1;
+    while (await TourModel.exists({ slug })) {
+      counter++;
+      slug = `${baseSlug}-${counter}`;
+    }
+
+    // Auto-resolve destination coordinates from destination registry
+    const resolvedGeo =
+      resolveDestinationCoordinates(validated.data.destination) ||
+      resolveDestinationCoordinates(validated.data.country);
+
+    const locationPoint = resolvedGeo
+      ? {
+          type: "Point" as const,
+          coordinates: resolvedGeo.coordinates,
+          description: `${validated.data.destination}, ${validated.data.country}`,
+          address: validated.data.destination,
+        }
+      : undefined;
 
     const newTour = await TourModel.create({
       ...validated.data,
@@ -141,9 +188,25 @@ export async function POST(request: NextRequest) {
       isPublished: true,
       itinerary: [],
       images: [validated.data.imageCover],
+      location: locationPoint,
+      startLocation: locationPoint,
+      city: validated.data.destination,
+      state: resolvedGeo?.region || undefined,
+      country: validated.data.country,
+      ratingsAverage: 0,
+      ratingsQuantity: 0,
     });
 
-    return NextResponse.json({ status: "success", data: newTour }, { status: 201 });
+    return NextResponse.json(
+      {
+        status: "success",
+        message: "Expedition published successfully",
+        id: String(newTour._id),
+        slug: newTour.slug,
+        data: newTour,
+      },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error("POST /api/tours error:", error);
 
@@ -160,15 +223,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const err = error as { code?: number };
+    const err = error as { code?: number; message?: string; name?: string };
     if (err.code === 11000) {
       return NextResponse.json(
-        { status: "error", message: "A tour with this name already exists." },
+        { status: "error", message: "A tour with this unique name or slug already exists." },
         { status: 409 }
       );
     }
+
+    if (err.name === "ValidationError") {
+      return NextResponse.json(
+        { status: "error", message: err.message || "MongoDB schema validation failed." },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { status: "error", message: "Failed to create tour" },
+      { status: "error", message: "Failed to create tour due to an unexpected server error." },
       { status: 500 }
     );
   }

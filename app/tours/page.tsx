@@ -23,6 +23,8 @@ function ToursContent() {
   const [noExactMatch, setNoExactMatch] = useState(false);
   const [searchedDestinationName, setSearchedDestinationName] = useState("");
 
+  const [resolvedDestination, setResolvedDestination] = useState<{ name: string; coordinates: [number, number] } | null>(null);
+
   // Filter States
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [category, setCategory] = useState(searchParams.get("category") || "all");
@@ -57,6 +59,7 @@ function ToursContent() {
     setSort("newest");
     setPage(1);
     setNoExactMatch(false);
+    setResolvedDestination(null);
     setNearbyTours([]);
     setBestForYouTours([]);
   };
@@ -86,6 +89,7 @@ function ToursContent() {
           setTotalPages(data.meta?.totalPages || 1);
           setNoExactMatch(Boolean(data.noExactMatch));
           setSearchedDestinationName(data.searchedDestination || destination || search);
+          setResolvedDestination(data.resolvedDestination || null);
           setNearbyTours(data.nearby || []);
           setBestForYouTours(data.bestForYou || []);
         }
@@ -234,10 +238,16 @@ function ToursContent() {
                         <span>Destination Notice</span>
                       </div>
                       <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1c2421]">
-                        No tours available in {searchedDestinationName || "this destination"} right now.
+                        {resolvedDestination
+                          ? `No tours available in ${searchedDestinationName || "this destination"} right now.`
+                          : `We couldn't recognize "${searchedDestinationName}".`}
                       </h2>
                       <p className="text-sm text-stone-600">
-                        Here are some nearby destinations you could explore instead.
+                        {resolvedDestination
+                          ? nearbyTours.length > 0
+                            ? "Here are some nearby destinations you could explore instead."
+                            : `No tours found within our maximum search radius of ${searchedDestinationName}. Browse our top-rated expeditions below.`
+                          : "Please check your destination spelling or explore our popular journeys across 50 global destinations."}
                       </p>
                     </div>
 

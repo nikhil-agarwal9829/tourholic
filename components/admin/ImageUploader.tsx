@@ -6,6 +6,8 @@ import { UploadCloud, CheckCircle2, AlertCircle, RefreshCw, X, Loader2 } from "l
 
 interface ImageUploaderProps {
   onUploadSuccess: (data: { url: string; publicId: string }) => void;
+  onUploadStart?: () => void;
+  onUploadError?: (error: string) => void;
   initialUrl?: string;
   initialPublicId?: string;
   required?: boolean;
@@ -13,6 +15,8 @@ interface ImageUploaderProps {
 
 export default function ImageUploader({
   onUploadSuccess,
+  onUploadStart,
+  onUploadError,
   initialUrl = "",
   initialPublicId = "",
   required = true,
@@ -49,6 +53,7 @@ export default function ImageUploader({
     setPreviewUrl(localPreview);
     setIsUploading(true);
     setUploadSuccess(false);
+    onUploadStart?.();
 
     try {
       const formData = new FormData();
@@ -62,8 +67,10 @@ export default function ImageUploader({
       const result = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(result.message || "Failed to upload photo to Cloudinary.");
+        const err = result.message || "Failed to upload photo to Cloudinary.";
+        setErrorMessage(err);
         setUploadSuccess(false);
+        onUploadError?.(err);
         return;
       }
 
@@ -75,8 +82,10 @@ export default function ImageUploader({
       setUploadSuccess(true);
       onUploadSuccess({ url: uploadedUrl, publicId: uploadedPublicId });
     } catch {
-      setErrorMessage("Network error during image upload. Please retry.");
+      const netErr = "Network error during image upload. Please retry.";
+      setErrorMessage(netErr);
       setUploadSuccess(false);
+      onUploadError?.(netErr);
     } finally {
       setIsUploading(false);
     }

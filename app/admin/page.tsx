@@ -51,8 +51,10 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [formFeedback, setFormFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCoverUploading, setIsCoverUploading] = useState(false);
 
   // New Tour Form State
   const [name, setName] = useState("");
@@ -96,19 +98,98 @@ export default function AdminDashboardPage() {
     }
   }, [user, isAuthLoading, fetchStats]);
 
-  const handleCreateTour = async (e: React.FormEvent) => {
+  /**
+   * Validate all form fields and trigger confirmation dialog before publication
+   */
+  const handleInitiatePublish = (e: React.FormEvent) => {
     e.preventDefault();
     setFormFeedback(null);
 
-    if (!imageCover) {
+    if (!name.trim() || name.trim().length < 3) {
       setFormFeedback({
         type: "error",
-        text: "Please upload a cover photo before publishing this expedition.",
+        text: "Expedition title must be at least 3 characters.",
       });
       return;
     }
 
+    if (!destination.trim() || destination.trim().length < 2) {
+      setFormFeedback({
+        type: "error",
+        text: "Destination city or region must be at least 2 characters.",
+      });
+      return;
+    }
+
+    if (!country.trim() || country.trim().length < 2) {
+      setFormFeedback({
+        type: "error",
+        text: "Country must be at least 2 characters.",
+      });
+      return;
+    }
+
+    if (!price || Number(price) <= 0) {
+      setFormFeedback({
+        type: "error",
+        text: "Price must be a valid positive amount.",
+      });
+      return;
+    }
+
+    if (!duration || Number(duration) <= 0) {
+      setFormFeedback({
+        type: "error",
+        text: "Duration must be at least 1 day.",
+      });
+      return;
+    }
+
+    if (isCoverUploading) {
+      setFormFeedback({
+        type: "error",
+        text: "Cover photo is currently uploading to Cloudinary. Please wait a moment for the upload to complete.",
+      });
+      return;
+    }
+
+    if (!imageCover) {
+      setFormFeedback({
+        type: "error",
+        text: "Please upload a cover photo to Cloudinary before publishing this expedition.",
+      });
+      return;
+    }
+
+    if (!summary.trim() || summary.trim().length < 10) {
+      setFormFeedback({
+        type: "error",
+        text: "Summary must be at least 10 characters for catalog discovery.",
+      });
+      return;
+    }
+
+    const effectiveDesc = description.trim() || `Discover the captivating highlights and unique cultural heritage of ${destination.trim()}, ${country.trim()} with our expert guides.`;
+    if (effectiveDesc.length < 20) {
+      setFormFeedback({
+        type: "error",
+        text: "Detailed description overview must be at least 20 characters.",
+      });
+      return;
+    }
+
+    // Open confirmation dialog
+    setConfirmModalOpen(true);
+  };
+
+  /**
+   * Execute actual tour creation in MongoDB Atlas after admin confirmation
+   */
+  const handleConfirmPublish = async () => {
     setIsSubmitting(true);
+    setFormFeedback(null);
+
+    const effectiveDesc = description.trim() || `Discover the captivating highlights and unique cultural heritage of ${destination.trim()}, ${country.trim()} with our expert guides.`;
 
     try {
       const res = await fetch("/api/tours", {
@@ -125,19 +206,29 @@ export default function AdminDashboardPage() {
           maxGroupSize: Number(maxGroupSize),
           imageCover,
           coverImagePublicId: coverImagePublicId || undefined,
-          summary: summary.trim() || `${name} in ${destination}, ${country}.`,
-          description: description.trim() || `Experience the beauty of ${destination} with expert guides.`,
+          summary: summary.trim(),
+          description: effectiveDesc,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setFormFeedback({ type: "error", text: data.message || "Failed to create tour." });
+        setConfirmModalOpen(false);
+        setFormFeedback({
+          type: "error",
+          text: data.message || "Failed to create tour in database.",
+        });
         return;
       }
 
-      setFormFeedback({ type: "success", text: "Expedition created and published successfully!" });
+      setConfirmModalOpen(false);
+      setFormFeedback({
+        type: "success",
+        text: "Expedition created and published successfully to MongoDB Atlas!",
+      });
+
+      // Clear form fields
       setName("");
       setDestination("");
       setCountry("");
@@ -146,13 +237,20 @@ export default function AdminDashboardPage() {
       setSummary("");
       setDescription("");
 
+      // Immediately refresh dashboard metrics & tour list
+      fetchStats();
+
+      // Close modal after brief confirmation display
       setTimeout(() => {
         setCreateModalOpen(false);
         setFormFeedback(null);
-        fetchStats();
-      }, 1200);
+      }, 1500);
     } catch {
-      setFormFeedback({ type: "error", text: "Network error while saving expedition." });
+      setConfirmModalOpen(false);
+      setFormFeedback({
+        type: "error",
+        text: "Network error while saving expedition. Please check your connection and retry.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -466,7 +564,7 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              <form onSubmit={handleCreateTour} className="space-y-4 text-xs">
+              <form onSubmit={handleInitiatePublish} className="space-y-4 text-xs">
                 <div>
                   <label className="font-semibold uppercase tracking-wider text-stone-600 block mb-1">
                     Expedition Title <span className="text-rose-600">*</span>
@@ -575,9 +673,19 @@ export default function AdminDashboardPage() {
                   required
                   initialUrl={imageCover}
                   initialPublicId={coverImagePublicId}
+                  onUploadStart={() => {
+                    setIsCoverUploading(true);
+                    setFormFeedback(null);
+                  }}
+                  onUploadError={(err) => {
+                    setIsCoverUploading(false);
+                    setFormFeedback({ type: "error", text: err });
+                  }}
                   onUploadSuccess={({ url, publicId }) => {
+                    setIsCoverUploading(false);
                     setImageCover(url);
                     setCoverImagePublicId(publicId);
+                    setFormFeedback(null);
                   }}
                 />
 
@@ -603,28 +711,39 @@ export default function AdminDashboardPage() {
                     rows={3}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Comprehensive description of the expedition experience..."
+                    placeholder="Comprehensive description of the expedition experience (min 20 characters)..."
                     className="w-full px-3 py-2 bg-[#fbfaf8] border border-[#e8e3d8] rounded-xl text-stone-800 focus:outline-none focus:border-[#124e3f]"
                   />
                 </div>
 
+                {/* Bottom error feedback if user is scrolled to bottom */}
+                {formFeedback && formFeedback.type === "error" && (
+                  <div className="p-3.5 rounded-xl text-xs flex items-center gap-2 bg-rose-50 text-rose-800 border border-rose-200">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{formFeedback.text}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-[#f0ece3]">
                   <button
                     type="button"
-                    onClick={() => setCreateModalOpen(false)}
+                    onClick={() => {
+                      setCreateModalOpen(false);
+                      setFormFeedback(null);
+                    }}
                     className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-semibold"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting || !imageCover}
+                    disabled={isSubmitting}
                     className="px-5 py-2.5 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
-                    {isSubmitting ? (
+                    {isCoverUploading ? (
                       <>
                         <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Publishing...</span>
+                        <span>Uploading Photo...</span>
                       </>
                     ) : (
                       <span>Publish Expedition</span>
@@ -632,6 +751,65 @@ export default function AdminDashboardPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Dialog Modal */}
+        {confirmModalOpen && (
+          <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-[#e8e3d8] travel-card-shadow space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#124e3f] flex items-center justify-center shrink-0">
+                  <Compass className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-[#1c2421]">
+                    Publish This Expedition?
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Confirm publication to the public exploration directory.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#fbfaf8] border border-[#e8e3d8] rounded-2xl p-4 space-y-3 text-xs">
+                <p className="text-stone-700 leading-relaxed font-medium">
+                  Are you sure you want to publish <span className="font-bold text-[#1c2421]">&ldquo;{name}&rdquo;</span> in <span className="font-bold text-[#1c2421]">{destination}, {country}</span> for <span className="font-bold text-[#124e3f]">${price}</span>?
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#f0ece3] text-[11px] text-stone-500">
+                  <div>Duration: <span className="font-semibold text-stone-800">{duration} Days</span></div>
+                  <div>Category: <span className="font-semibold text-stone-800 capitalize">{category}</span></div>
+                  <div>Difficulty: <span className="font-semibold text-stone-800 capitalize">{difficulty}</span></div>
+                  <div>Group Size: <span className="font-semibold text-stone-800">Max {maxGroupSize}</span></div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setConfirmModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-semibold text-xs hover:bg-stone-50 transition-colors disabled:opacity-50"
+                >
+                  No, Go Back
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleConfirmPublish}
+                  className="px-5 py-2.5 bg-[#124e3f] hover:bg-[#0c382d] text-white rounded-xl font-bold text-xs shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Publishing Tour...</span>
+                    </>
+                  ) : (
+                    <span>Yes, Publish Tour</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
