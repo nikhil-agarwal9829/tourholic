@@ -283,10 +283,12 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailDeliveryRes
         data?.error ||
         `Brevo API responded with HTTP ${response.status} (${response.statusText})`;
 
-      // If REST API failed with "Key not found" (e.g. key is an SMTP key or invalid for REST),
+      // If REST API failed with 401, "Key not found", or "unrecognised IP",
       // attempt fallback to Brevo SMTP Relay if credentials match
       if (
         errMsg.toLowerCase().includes("key not found") ||
+        errMsg.toLowerCase().includes("unrecognised ip") ||
+        errMsg.toLowerCase().includes("unauthorized") ||
         response.status === 401
       ) {
         if (config.apiKey.startsWith("xsmtpsib-") || config.smtpPass?.startsWith("xsmtpsib-") || config.smtpHost) {
