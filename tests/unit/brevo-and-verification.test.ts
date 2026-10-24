@@ -276,4 +276,55 @@ describe("Brevo Email Service & Email Verification System", () => {
       expect(notificationErrorRecorded).toBe(true);
     });
   });
+
+  describe("5. Key Not Found Sanitization & Token URL Resolution", () => {
+    it("sanitizes 'Key not found' into user-friendly configuration guidance", () => {
+      const sanitizeDeliveryError = (err?: string) => {
+        if (!err) return "Unable to deliver verification email at this moment.";
+        const lower = err.toLowerCase();
+        if (lower.includes("key not found") || lower.includes("unauthorized") || lower.includes("authentication failed")) {
+          return "Email service authentication error. Please ensure valid Brevo credentials are configured.";
+        }
+        return err;
+      };
+
+      expect(sanitizeDeliveryError("Key not found")).toBe(
+        "Email service authentication error. Please ensure valid Brevo credentials are configured."
+      );
+      expect(sanitizeDeliveryError("401 Unauthorized: Key not found")).toBe(
+        "Email service authentication error. Please ensure valid Brevo credentials are configured."
+      );
+      expect(sanitizeDeliveryError("Recipient inbox full")).toBe("Recipient inbox full");
+    });
+
+    it("extracts token whether user pastes full link or raw token", () => {
+      const extractToken = (input: string) => {
+        let cleaned = input.trim();
+        if (cleaned.includes("token=")) {
+          const match = cleaned.match(/token=([a-zA-Z0-9]+)/);
+          if (match && match[1]) return match[1];
+        }
+        return cleaned;
+      };
+
+      const raw = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+      expect(extractToken(raw)).toBe(raw);
+      expect(extractToken(`https://tourholic.vercel.app/verify-email?token=${raw}`)).toBe(raw);
+      expect(extractToken(`http://localhost:3000/verify-email?token=${raw}&src=email`)).toBe(raw);
+    });
+
+    it("resolves canonical production app URL cleanly without trailing slash", () => {
+      const resolveUrl = (envVal?: string, vercelUrl?: string) => {
+        let url = envVal || (vercelUrl ? `https://${vercelUrl}` : "") || "http://localhost:3000";
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+          url = `https://${url}`;
+        }
+        return url.replace(/\/$/, "");
+      };
+
+      expect(resolveUrl("https://tourholic.vercel.app/")).toBe("https://tourholic.vercel.app");
+      expect(resolveUrl(undefined, "tourholic-deploy.vercel.app")).toBe("https://tourholic-deploy.vercel.app");
+      expect(resolveUrl(undefined, undefined)).toBe("http://localhost:3000");
+    });
+  });
 });

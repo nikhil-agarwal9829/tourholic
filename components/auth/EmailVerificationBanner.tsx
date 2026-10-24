@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Mail, RefreshCw, CheckCircle2, AlertCircle, Clock, X } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 
 export default function EmailVerificationBanner() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [isResending, setIsResending] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [cooldown, setCooldown] = useState(0);
@@ -21,8 +23,8 @@ export default function EmailVerificationBanner() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // If not logged in, or already verified, or admin, or dismissed for this browser tab:
-  if (!user || user.role === "admin" || user.emailVerified === true || isDismissed) {
+  // If not logged in, or already verified, or admin, or on verify-email page, or dismissed for this tab:
+  if (!user || user.role === "admin" || user.emailVerified === true || pathname === "/verify-email" || isDismissed) {
     return null;
   }
 
@@ -52,9 +54,13 @@ export default function EmailVerificationBanner() {
           text: data.message,
         });
       } else {
+        let errText = data.message || "Unable to send verification email.";
+        if (errText.toLowerCase().includes("key not found") || errText.toLowerCase().includes("unauthorized")) {
+          errText = "Email service configuration error. Please verify your Brevo credentials in Vercel or local config.";
+        }
         setMessage({
           type: "error",
-          text: data.message || "Unable to send verification email.",
+          text: errText,
         });
         if (data.cooldownRemainingSeconds) {
           setCooldown(data.cooldownRemainingSeconds);

@@ -50,44 +50,61 @@ async function handleVerification(request: NextRequest) {
     // Hash the incoming raw token using SHA-256
     const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
 
-    // Atomically find user with matching unexpired token
-    const user = await UserModel.findOne({
-      verificationTokenHash: tokenHash,
-      verificationTokenExpiresAt: { $gt: new Date() },
-    }).select("+verificationTokenHash +verificationTokenExpiresAt");
+    // Atomically find and verify user with matching unexpired token in a single atomic database operation
+    const user = await UserModel.findOneAndUpdate(
+      {
+        verificationTokenHash: tokenHash,
+        verificationTokenExpiresAt: { $gt: new Date() },
+      },
+      {
+        $set: { emailVerified: true },
+        $unset: { verificationTokenHash: 1, verificationTokenExpiresAt: 1 },
+      },
+      { new: true }
+    );
 
     if (!user) {
-      // Check if this token was already used or expired
-      const expiredOrUsed = await UserModel.findOne({
+      // Check if this token was expired
+      const expiredUser = await UserModel.findOne({
         verificationTokenHash: tokenHash,
-      }).select("+verificationTokenHash +verificationTokenExpiresAt");
+        verificationTokenExpiresAt: { $lte: new Date() },
+      }).select("+verificationTokenExpiresAt");
 
-      if (expiredOrUsed) {
+      if (expiredUser) {
         return NextResponse.json(
           {
             status: "error",
             code: "TOKEN_EXPIRED",
-            message: "This verification link has expired. Please request a new verification email.",
+            message: "This verification link has expired. Please request a new verification email below.",
           },
           { status: 400 }
         );
       }
 
+      // Check if the current user session is already verified
+      const currentSession = await getSession();
+      if (currentSession?.emailVerified) {
+        return NextResponse.json({
+          status: "success",
+          message: "Your email address is already verified! You can proceed to explore and book expeditions.",
+          user: {
+            id: currentSession.userId,
+            name: currentSession.name,
+            email: currentSession.email,
+            emailVerified: true,
+          },
+        });
+      }
+
       return NextResponse.json(
         {
           status: "error",
-          code: "INVALID_TOKEN",
-          message: "The verification link is invalid or has already been used.",
+          code: "INVALID_OR_USED_TOKEN",
+          message: "This verification link is invalid or has already been used. If you have already verified your account, you can sign in directly.",
         },
         { status: 400 }
       );
     }
-
-    // Atomically update user to verified state and invalidate the token
-    user.emailVerified = true;
-    user.verificationTokenHash = undefined;
-    user.verificationTokenExpiresAt = undefined;
-    await user.save();
 
     // Check existing session; if present or matching, update the cookie with emailVerified: true
     const currentSession = await getSession();

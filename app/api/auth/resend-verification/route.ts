@@ -151,13 +151,21 @@ export async function POST(request: NextRequest) {
         cooldownRemainingSeconds: COOLDOWN_SECONDS,
       });
     } else {
+      let userFacingError = deliveryError;
+      if (userFacingError) {
+        const lower = userFacingError.toLowerCase();
+        if (lower.includes("key not found") || lower.includes("unauthorized") || lower.includes("authentication failed")) {
+          userFacingError = "Email service authentication error. Please ensure valid Brevo credentials are configured.";
+        }
+      } else {
+        userFacingError = "Unable to deliver verification email at this moment. Please check back shortly.";
+      }
+
       return NextResponse.json(
         {
           status: "error",
           code: "EMAIL_DISPATCH_FAILED",
-          message:
-            deliveryError ||
-            "Unable to deliver verification email at this moment. Please check your network or try again shortly.",
+          message: userFacingError,
           cooldownRemainingSeconds: 30,
         },
         { status: 502 }

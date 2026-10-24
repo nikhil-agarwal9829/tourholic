@@ -1,11 +1,12 @@
 /**
  * Brevo Transactional Email Service for Touroholic
- * Official REST API integration at https://api.brevo.com/v3/smtp/email
+ * Supports both Brevo Official REST API and Brevo SMTP Relay (smtp-relay.brevo.com:587).
  * Strictly protects credentials and never logs or leaks API keys.
  */
 
 import fs from "fs";
 import path from "path";
+import nodemailer from "nodemailer";
 
 export interface EmailRecipient {
   email: string;
@@ -26,10 +27,33 @@ export interface EmailDeliveryResult {
   provider: "brevo" | "none";
 }
 
-interface BrevoConfig {
+export interface BrevoConfig {
   apiKey: string;
   senderEmail: string;
   senderName: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPass?: string;
+  deliveryMode: "smtp" | "rest";
+}
+
+/**
+ * Returns canonical production application URL, falling back safely on Vercel deployment URLs or localhost
+ */
+export function getAppUrl(): string {
+  let appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000";
+
+  if (!appUrl.startsWith("http://") && !appUrl.startsWith("https://")) {
+    appUrl = `https://${appUrl}`;
+  }
+
+  return appUrl.replace(/\/$/, "");
 }
 
 /**
@@ -40,68 +64,126 @@ export function getBrevoConfig(): BrevoConfig | null {
   let apiKey = process.env.BREVO_API_KEY?.trim() || "";
   let senderEmail = process.env.BREVO_SENDER_EMAIL?.trim() || "";
   let senderName = process.env.BREVO_SENDER_NAME?.trim() || "Touroholic Expeditions";
+  let smtpHost = process.env.SMTP_SERVER?.trim() || process.env.SMTP_HOST?.trim() || "";
+  let smtpPort = parseInt(process.env.SMTP_PORT?.trim() || "587", 10);
+  let smtpUser = process.env.SMTP_LOGIN?.trim() || process.env.SMTP_USER?.trim() || "";
+  let smtpPass = process.env.SMTP_PASSWORD?.trim() || process.env.SMTP_PASS?.trim() || "";
 
   // Check smtp_server.txt if env variables are not fully configured
-  if (!apiKey || !senderEmail) {
-    try {
-      const candidates = [
-        path.join(process.cwd(), "smtp_server.txt"),
-        "G:\\tour-managment\\smtp_server.txt",
-      ];
-      for (const filepath of candidates) {
-        if (fs.existsSync(/*turbopackIgnore: true*/ filepath)) {
-          const content = fs.readFileSync(/*turbopackIgnore: true*/ filepath, "utf8");
-          if (content && content.trim().length > 0) {
-            const lines = content.split(/\r?\n/);
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || trimmed.startsWith("#")) continue;
+  try {
+    const candidates = [
+      path.join(process.cwd(), "smtp_server.txt"),
+      "G:\\tour-managment\\smtp_server.txt",
+    ];
+    for (const filepath of candidates) {
+      if (fs.existsSync(/*turbopackIgnore: true*/ filepath)) {
+        const content = fs.readFileSync(/*turbopackIgnore: true*/ filepath, "utf8");
+        if (content && content.trim().length > 0) {
+          const lines = content.split(/\r?\n/);
+          let nextKey: "server" | "port" | "login" | null = null;
 
-              if (trimmed.includes("=")) {
-                const [k, ...vParts] = trimmed.split("=");
-                const key = k.trim().toUpperCase();
-                const val = vParts.join("=").trim().replace(/^["']|["']$/g, "");
-                if (key === "BREVO_API_KEY" || key === "API_KEY" || key === "SMTP_KEY" || key === "PASSWORD") {
-                  if (!apiKey && val) apiKey = val;
-                } else if (key === "BREVO_SENDER_EMAIL" || key === "SENDER_EMAIL" || key === "USER" || key === "LOGIN") {
-                  if (!senderEmail && val.includes("@")) senderEmail = val;
-                } else if (key === "BREVO_SENDER_NAME" || key === "SENDER_NAME") {
-                  if (val) senderName = val;
-                }
-              } else if (trimmed.includes(":")) {
-                const [k, ...vParts] = trimmed.split(":");
-                const key = k.trim().toLowerCase();
-                const val = vParts.join(":").trim().replace(/^["']|["']$/g, "");
-                if (key.includes("key") || key.includes("password")) {
-                  if (!apiKey && val) apiKey = val;
-                } else if (key.includes("email") || key.includes("user") || key.includes("login")) {
-                  if (!senderEmail && val.includes("@")) senderEmail = val;
-                } else if (key.includes("name")) {
-                  if (val) senderName = val;
-                }
-              } else if (trimmed.startsWith("xkeysib-") || trimmed.startsWith("xsmtpsib-")) {
-                if (!apiKey) apiKey = trimmed;
-              } else if (trimmed.includes("@") && !senderEmail) {
-                senderEmail = trimmed;
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith("#")) continue;
+
+            const lower = line.toLowerCase();
+            if (lower === "smtp server" || lower === "server" || lower === "host") {
+              nextKey = "server";
+              continue;
+            }
+            if (lower === "port") {
+              nextKey = "port";
+              continue;
+            }
+            if (lower === "login" || lower === "username" || lower === "user") {
+              nextKey = "login";
+              continue;
+            }
+
+            if (nextKey === "server") {
+              if (!smtpHost) smtpHost = line;
+              nextKey = null;
+              continue;
+            }
+            if (nextKey === "port") {
+              if (!smtpPort || smtpPort === 587) smtpPort = parseInt(line, 10) || 587;
+              nextKey = null;
+              continue;
+            }
+            if (nextKey === "login") {
+              if (!smtpUser) smtpUser = line;
+              if (!senderEmail && line.includes("@")) senderEmail = line;
+              nextKey = null;
+              continue;
+            }
+
+            if (line.includes("=")) {
+              const [k, ...vParts] = line.split("=");
+              const key = k.trim().toUpperCase();
+              const val = vParts.join("=").trim().replace(/^["']|["']$/g, "");
+              if (key === "BREVO_API_KEY" || key === "API_KEY" || key === "SMTP_KEY" || key === "PASSWORD" || key === "SMTP_PASS") {
+                if (!apiKey) apiKey = val;
+                if (!smtpPass) smtpPass = val;
+              } else if (key === "BREVO_SENDER_EMAIL" || key === "SENDER_EMAIL" || key === "USER" || key === "LOGIN" || key === "SMTP_USER") {
+                if (!senderEmail) senderEmail = val;
+                if (!smtpUser) smtpUser = val;
+              } else if (key === "BREVO_SENDER_NAME" || key === "SENDER_NAME") {
+                if (val) senderName = val;
+              } else if (key === "SMTP_SERVER" || key === "SMTP_HOST") {
+                if (!smtpHost) smtpHost = val;
+              } else if (key === "SMTP_PORT") {
+                if (!smtpPort) smtpPort = parseInt(val, 10) || 587;
               }
+            } else if (line.startsWith("xsmtpsib-") || line.startsWith("xkeysib-")) {
+              if (!apiKey) apiKey = line;
+              if (!smtpPass) smtpPass = line;
+            } else if (line.includes("@") && !senderEmail) {
+              senderEmail = line;
+              if (!smtpUser) smtpUser = line;
             }
           }
         }
       }
-    } catch {
-      // Safe non-blocking fallback
     }
+  } catch {
+    // Safe non-blocking fallback
   }
 
-  if (!apiKey || !senderEmail) {
+  // Ensure default host for Brevo SMTP if we have SMTP credentials
+  if ((apiKey.startsWith("xsmtpsib-") || smtpPass.startsWith("xsmtpsib-")) && !smtpHost) {
+    smtpHost = "smtp-relay.brevo.com";
+  }
+
+  if (!apiKey && !smtpPass) {
+    return null;
+  }
+  if (!senderEmail && !smtpUser) {
     return null;
   }
 
-  return { apiKey, senderEmail, senderName };
+  // Determine delivery mode
+  // If the key is an SMTP relay key (starts with xsmtpsib-) or explicit SMTP host is set:
+  const isSmtp =
+    apiKey.startsWith("xsmtpsib-") ||
+    smtpPass.startsWith("xsmtpsib-") ||
+    (smtpHost && (smtpUser || senderEmail) && (smtpPass || apiKey));
+
+  const deliveryMode: "smtp" | "rest" = isSmtp ? "smtp" : "rest";
+
+  return {
+    apiKey: apiKey || smtpPass,
+    senderEmail: senderEmail || smtpUser,
+    senderName,
+    smtpHost: smtpHost || "smtp-relay.brevo.com",
+    smtpPort: smtpPort || 587,
+    smtpUser: smtpUser || senderEmail,
+    smtpPass: smtpPass || apiKey,
+    deliveryMode,
+  };
 }
 
 /**
- * Universal sender using Brevo's official transactional REST API
+ * Universal sender using Brevo's official transactional REST API or Brevo SMTP Relay
  */
 export async function sendEmail(payload: EmailPayload): Promise<EmailDeliveryResult> {
   const config = getBrevoConfig();
@@ -128,6 +210,46 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailDeliveryRes
 
   const plainText = payload.text || payload.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
+  // Mode 1: Brevo SMTP Relay (via nodemailer)
+  if (config.deliveryMode === "smtp") {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: config.smtpHost || "smtp-relay.brevo.com",
+        port: config.smtpPort || 587,
+        secure: config.smtpPort === 465,
+        auth: {
+          user: config.smtpUser || config.senderEmail,
+          pass: config.smtpPass || config.apiKey,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      });
+
+      const info = await transporter.sendMail({
+        from: `"${config.senderName}" <${config.senderEmail}>`,
+        to: recipientName ? `"${recipientName}" <${recipientEmail}>` : recipientEmail,
+        subject: payload.subject,
+        html: payload.html,
+        text: plainText,
+      });
+
+      return {
+        status: "sent",
+        provider: "brevo",
+        messageId: info.messageId || `brevo-smtp-${Date.now()}`,
+      };
+    } catch (smtpErr: unknown) {
+      const rawError = smtpErr instanceof Error ? smtpErr.message : "SMTP delivery failed";
+      return {
+        status: "failed",
+        provider: "brevo",
+        error: rawError,
+      };
+    }
+  }
+
+  // Mode 2: Brevo Official REST API (via fetch)
   try {
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -160,6 +282,45 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailDeliveryRes
         data?.message ||
         data?.error ||
         `Brevo API responded with HTTP ${response.status} (${response.statusText})`;
+
+      // If REST API failed with "Key not found" (e.g. key is an SMTP key or invalid for REST),
+      // attempt fallback to Brevo SMTP Relay if credentials match
+      if (
+        errMsg.toLowerCase().includes("key not found") ||
+        response.status === 401
+      ) {
+        if (config.apiKey.startsWith("xsmtpsib-") || config.smtpPass?.startsWith("xsmtpsib-") || config.smtpHost) {
+          try {
+            const fallbackTransporter = nodemailer.createTransport({
+              host: config.smtpHost || "smtp-relay.brevo.com",
+              port: config.smtpPort || 587,
+              secure: false,
+              auth: {
+                user: config.smtpUser || config.senderEmail,
+                pass: config.smtpPass || config.apiKey,
+              },
+              tls: { rejectUnauthorized: false },
+            });
+
+            const info = await fallbackTransporter.sendMail({
+              from: `"${config.senderName}" <${config.senderEmail}>`,
+              to: recipientName ? `"${recipientName}" <${recipientEmail}>` : recipientEmail,
+              subject: payload.subject,
+              html: payload.html,
+              text: plainText,
+            });
+
+            return {
+              status: "sent",
+              provider: "brevo",
+              messageId: info.messageId || `brevo-smtp-fallback-${Date.now()}`,
+            };
+          } catch {
+            // Fall through to error return below
+          }
+        }
+      }
+
       return {
         status: "failed",
         provider: "brevo",
@@ -190,7 +351,7 @@ export async function sendVerificationEmail(params: {
   userName?: string;
   verificationToken: string;
 }): Promise<EmailDeliveryResult> {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = getAppUrl();
   const verificationUrl = `${appUrl}/verify-email?token=${encodeURIComponent(params.verificationToken)}`;
   const displayName = params.userName || "Fellow Explorer";
 
@@ -259,7 +420,7 @@ export async function sendBookingConfirmationEmail(params: {
   paymentStatus: string;
   paymentDueAt?: Date;
 }): Promise<EmailDeliveryResult> {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = getAppUrl();
   const bookingsUrl = `${appUrl}/my-bookings`;
   const displayName = params.customerName || "Valued Explorer";
 
@@ -376,7 +537,7 @@ export async function sendPaymentConfirmationEmail(params: {
   paymentMethod: string;
   reconciledAt: Date;
 }): Promise<EmailDeliveryResult> {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = getAppUrl();
   const bookingsUrl = `${appUrl}/my-bookings`;
   const displayName = params.customerName || "Valued Traveler";
 
@@ -470,7 +631,7 @@ export async function sendPasswordResetEmail(params: {
   userName?: string;
   resetToken: string;
 }): Promise<EmailDeliveryResult> {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = getAppUrl();
   const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(params.resetToken)}`;
   const displayName = params.userName || "Traveler";
 
