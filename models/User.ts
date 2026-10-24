@@ -7,6 +7,13 @@ export interface IUser extends Document {
   photo?: string;
   role: "user" | "admin";
   active: boolean;
+  emailVerified: boolean;
+  verificationTokenHash?: string;
+  verificationTokenExpiresAt?: Date;
+  lastVerificationEmailSentAt?: Date;
+  passwordResetTokenHash?: string;
+  passwordResetTokenExpiresAt?: Date;
+  lastPasswordResetEmailSentAt?: Date;
   favoriteTours: mongoose.Types.ObjectId[];
   travelPreferences?: {
     homeCountry?: string;
@@ -59,6 +66,33 @@ const UserSchema = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    verificationTokenHash: {
+      type: String,
+      select: false,
+      index: true,
+    },
+    verificationTokenExpiresAt: {
+      type: Date,
+    },
+    lastVerificationEmailSentAt: {
+      type: Date,
+    },
+    passwordResetTokenHash: {
+      type: String,
+      select: false,
+      index: true,
+    },
+    passwordResetTokenExpiresAt: {
+      type: Date,
+    },
+    lastPasswordResetEmailSentAt: {
+      type: Date,
+    },
     favoriteTours: [
       {
         type: Schema.Types.ObjectId,
@@ -88,6 +122,8 @@ const UserSchema = new Schema<IUser>(
     toJSON: {
       transform(_doc, ret) {
         delete (ret as { passwordHash?: string }).passwordHash;
+        delete (ret as { verificationTokenHash?: string }).verificationTokenHash;
+        delete (ret as { passwordResetTokenHash?: string }).passwordResetTokenHash;
         return ret;
       },
     },

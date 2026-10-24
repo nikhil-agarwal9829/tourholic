@@ -4,6 +4,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import TravelAssistantWidget from "@/components/chatbot/TravelAssistantWidget";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import EmailVerificationBanner from "@/components/auth/EmailVerificationBanner";
 import "./globals.css";
 
 const jakartaSans = Plus_Jakarta_Sans({
@@ -36,6 +37,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-[#fbfaf8] text-[#1c2421]">
         <AuthProvider>
+          <EmailVerificationBanner />
           <Navbar />
           <main className="flex-1">{children}</main>
           <Footer />

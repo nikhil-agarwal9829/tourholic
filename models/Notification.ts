@@ -8,6 +8,8 @@ export type NotificationType =
   | "payment_deadline_approaching"
   | "payment_overdue"
   | "refund_status_update"
+  | "email_verification"
+  | "password_reset"
   | "general";
 
 export interface INotification extends Document {
@@ -21,6 +23,10 @@ export interface INotification extends Document {
   channel: "in_app" | "email" | "both";
   emailDeliveryStatus: "not_attempted" | "sent" | "skipped_no_provider" | "failed";
   emailDeliveryError?: string;
+  providerMessageId?: string;
+  attemptCount: number;
+  lastAttemptAt?: Date;
+  errorSummary?: string;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -50,6 +56,8 @@ const NotificationSchema = new Schema<INotification>(
         "payment_deadline_approaching",
         "payment_overdue",
         "refund_status_update",
+        "email_verification",
+        "password_reset",
         "general",
       ],
       index: true,
@@ -83,6 +91,20 @@ const NotificationSchema = new Schema<INotification>(
       default: "not_attempted",
     },
     emailDeliveryError: {
+      type: String,
+    },
+    providerMessageId: {
+      type: String,
+      index: true,
+    },
+    attemptCount: {
+      type: Number,
+      default: 1,
+    },
+    lastAttemptAt: {
+      type: Date,
+    },
+    errorSummary: {
       type: String,
     },
     metadata: {

@@ -142,23 +142,28 @@ export async function POST(
       ipAddress: clientIp,
     });
 
-    // 4. Send customer in-app notification & email
+    // 4. Send customer in-app notification & email safely
     const recipientUser = booking.user as any;
     const recipientTour = booking.tour as any;
 
-    const notificationResult = await sendCancellationNotification({
-      userId: recipientUser?._id || booking.user,
-      bookingId: booking._id,
-      customerName: booking.guestName || recipientUser?.name || "Valued Traveler",
-      customerEmail: booking.guestEmail || recipientUser?.email || "",
-      bookingReference: booking.bookingReference,
-      tourName: recipientTour?.name || "Expedition Tour",
-      departureDate: booking.departureDate,
-      totalPrice: booking.totalPrice,
-      currency: booking.currency || "USD",
-      cancellationReason: booking.cancellationReason,
-      isPaid,
-    });
+    let notificationResult: any = null;
+    try {
+      notificationResult = await sendCancellationNotification({
+        userId: recipientUser?._id || booking.user,
+        bookingId: booking._id,
+        customerName: booking.guestName || recipientUser?.name || "Valued Traveler",
+        customerEmail: booking.guestEmail || recipientUser?.email || "",
+        bookingReference: booking.bookingReference,
+        tourName: recipientTour?.name || "Expedition Tour",
+        departureDate: booking.departureDate,
+        totalPrice: booking.totalPrice,
+        currency: booking.currency || "USD",
+        cancellationReason: booking.cancellationReason,
+        isPaid,
+      });
+    } catch (notifErr) {
+      console.error("Non-fatal cancellation notification dispatch error:", notifErr);
+    }
 
     return NextResponse.json({
       status: "success",

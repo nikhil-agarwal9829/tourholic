@@ -10,6 +10,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: "user" | "admin";
+  emailVerified?: boolean;
   photo?: string;
   travelPreferences?: TravelPreferences;
 }

@@ -56,6 +56,7 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
       await import("@/models/TourDeparture");
       await import("@/models/Notification");
       await import("@/models/AuditLog");
+      await import("@/models/Payment");
       return mongooseInstance;
     });
   }

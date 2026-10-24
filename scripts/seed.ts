@@ -36,6 +36,7 @@ async function seedDatabase() {
       passwordHash: adminPasswordHash,
       role: "admin",
       active: true,
+      emailVerified: true,
       photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
     },
     { upsert: true, new: true }
@@ -49,6 +50,7 @@ async function seedDatabase() {
       passwordHash: userPasswordHash,
       role: "user",
       active: true,
+      emailVerified: true,
       photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
       travelPreferences: {
         homeCountry: "United States",

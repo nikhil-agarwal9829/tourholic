@@ -25,7 +25,10 @@ export async function GET() {
         if (userDoc) {
           return NextResponse.json({
             status: "success",
-            user: userDoc,
+            user: {
+              ...userDoc,
+              emailVerified: Boolean(userDoc.emailVerified ?? (userDoc.role === "admin")),
+            },
           });
         }
       } catch (dbErr) {
@@ -41,6 +44,7 @@ export async function GET() {
         name: session.name,
         email: session.email,
         role: session.role,
+        emailVerified: Boolean(session.emailVerified ?? (session.role === "admin")),
         favoriteTours: [],
       },
     });

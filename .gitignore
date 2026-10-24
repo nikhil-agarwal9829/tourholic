@@ -36,6 +36,7 @@ yarn-error.log*
 !.env.vercel.example
 api.txt
 i1.txt
+smtp_server.txt
 
 # vercel
 .vercel

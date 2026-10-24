@@ -65,6 +65,7 @@ interface BookingRecord {
   currency: string;
   bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
   paymentStatus: "unpaid" | "pending" | "paid" | "failed" | "refunded" | "partially_refunded";
+  outstandingBalance?: number;
   paymentDueAt: string | null;
   paymentReference: string | null;
   paymentMethod: string | null;
@@ -136,6 +137,7 @@ export default function AdminBookingsPage() {
   const [reconcileMethod, setReconcileMethod] = useState("Bank Transfer");
   const [reconcileNotes, setReconcileNotes] = useState("");
   const [isReconciling, setIsReconciling] = useState(false);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
 
   // Global Action Feedback Toast
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -281,12 +283,14 @@ export default function AdminBookingsPage() {
   // Process Manual Reconciliation
   const handleConfirmReconciliation = async () => {
     if (!reconcileModalBooking) return;
+    setReconcileError(null);
+
     if (!reconcileRef.trim() || reconcileRef.trim().length < 3) {
-      showToast("error", "Payment reference or transaction number is required.");
+      setReconcileError("Payment reference or transaction number is required (min 3 characters).");
       return;
     }
     if (!reconcileNotes.trim() || reconcileNotes.trim().length < 5) {
-      showToast("error", "Please record audit notes explaining how payment was verified.");
+      setReconcileError("Please record audit notes explaining how payment was verified (min 5 characters).");
       return;
     }
 
@@ -308,21 +312,33 @@ export default function AdminBookingsPage() {
         setReconcileModalBooking(null);
         setReconcileRef("");
         setReconcileNotes("");
+        setReconcileError(null);
         fetchBookings(pagination.page);
+
+        // Notify other admin components (e.g. revenue reports or overview)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("touroholic:payment-reconciled", { detail: { bookingId: reconcileModalBooking._id } }));
+        }
+
         if (selectedBooking && selectedBooking._id === reconcileModalBooking._id) {
           handleOpenDetail({
             ...selectedBooking,
             paymentStatus: "paid",
+            outstandingBalance: 0,
             paidAt: new Date().toISOString(),
             paymentReference: reconcileRef.trim(),
             paymentMethod: reconcileMethod,
           });
         }
       } else {
-        showToast("error", data.message || "Failed to reconcile payment.");
+        const errMsg = data.message || "Failed to reconcile payment.";
+        setReconcileError(errMsg);
+        showToast("error", errMsg);
       }
     } catch {
-      showToast("error", "Network error reconciling payment.");
+      const networkErr = "Network error reconciling payment. Please check your connection and try again.";
+      setReconcileError(networkErr);
+      showToast("error", networkErr);
     } finally {
       setIsReconciling(false);
     }
@@ -707,6 +723,7 @@ export default function AdminBookingsPage() {
                                 onClick={() => {
                                   setReconcileModalBooking(b);
                                   setReconcileRef(`WIRE-${Date.now().toString().slice(-6)}`);
+                                  setReconcileError(null);
                                 }}
                                 title="Record Reconciled Payment"
                                 className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -958,6 +975,7 @@ export default function AdminBookingsPage() {
                         onClick={() => {
                           setReconcileModalBooking(selectedBooking);
                           setReconcileRef(`WIRE-${Date.now().toString().slice(-6)}`);
+                          setReconcileError(null);
                         }}
                         className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1"
                       >
@@ -1195,6 +1213,16 @@ export default function AdminBookingsPage() {
             </div>
 
             <div className="p-5 space-y-4 text-xs">
+              {reconcileError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-start gap-2.5 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <div>
+                    <div className="font-semibold text-xs">Reconciliation Failed</div>
+                    <div className="text-[11px] text-red-600 mt-0.5 leading-snug">{reconcileError}</div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-[#fbfaf8] border border-stone-200 rounded-xl p-3 flex justify-between items-center">
                 <div>
                   <span className="text-stone-400 text-[11px]">Amount to Reconcile:</span>

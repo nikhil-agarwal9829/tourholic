@@ -9,6 +9,7 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: "user" | "admin";
+  emailVerified?: boolean;
 }
 
 export async function hashPassword(password: string): Promise<string> {

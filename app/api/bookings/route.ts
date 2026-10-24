@@ -7,6 +7,7 @@ import { User as UserModel } from "@/models/User";
 import { TourDeparture as TourDepartureModel } from "@/models/TourDeparture";
 import { SAMPLE_TOURS } from "@/lib/data/sample-tours";
 import { INDIAN_TOURS } from "@/lib/data/indian-tours";
+import { sendBookingConfirmationNotification } from "@/lib/notifications/service";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -106,6 +107,19 @@ export async function POST(request: NextRequest) {
             message: "User account could not be found. Please log in again.",
           },
           { status: 401 }
+        );
+      }
+
+      // Enforce email verification on the server (preserve admin authorization)
+      if (userDoc.role !== "admin" && !userDoc.emailVerified) {
+        return NextResponse.json(
+          {
+            status: "error",
+            code: "EMAIL_NOT_VERIFIED",
+            message:
+              "Email verification is required before reserving an expedition. Please verify your email via the link sent to your inbox, or request a new verification email.",
+          },
+          { status: 403 }
         );
       }
 
@@ -213,11 +227,34 @@ export async function POST(request: NextRequest) {
         currency: tour.currency || "USD",
         bookingStatus: "confirmed",
         paymentStatus: "unpaid",
+        outstandingBalance: totalPrice,
         paymentDueAt,
         guestName: guestName.trim() || userDoc.name,
         guestEmail: guestEmail.trim().toLowerCase() || userDoc.email,
         specialRequests,
       });
+
+      // Dispatch transactional booking confirmation email safely (non-blocking failure)
+      try {
+        await sendBookingConfirmationNotification({
+          bookingId: (booking._id as object).toString(),
+          userId: (userDoc._id as object).toString(),
+          customerEmail: booking.guestEmail || userDoc.email,
+          customerName: booking.guestName || userDoc.name,
+          bookingReference: booking.bookingReference,
+          tourName: tour.name,
+          destination: tour.destination || "Expedition Location",
+          departureDate: booking.departureDate,
+          travelers: booking.travelers,
+          totalPrice: booking.totalPrice,
+          currency: booking.currency,
+          bookingStatus: booking.bookingStatus,
+          paymentStatus: booking.paymentStatus,
+          paymentDueAt: booking.paymentDueAt,
+        });
+      } catch (notifErr) {
+        console.error("Non-fatal booking confirmation notification error:", notifErr);
+      }
 
       const populatedBooking = await BookingModel.findById(booking._id)
         .populate("tour", "name price slug imageCover currency duration destination")

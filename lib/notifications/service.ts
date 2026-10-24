@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { Notification, NotificationType, INotification } from "@/models/Notification";
 import {
   sendEmail,
+  sendBookingConfirmationEmail,
+  sendPaymentConfirmationEmail,
   buildPaymentReminderEmail,
   buildCancellationEmail,
   EmailDeliveryResult,
@@ -57,7 +59,7 @@ export async function dispatchNotification(
       emailDeliveryError = err instanceof Error ? err.message : "Email dispatch exception";
       emailResult = {
         status: "failed",
-        provider: "unknown",
+        provider: "none",
         error: emailDeliveryError,
       };
     }
@@ -66,21 +68,33 @@ export async function dispatchNotification(
   // 2. Persist in-app notification to MongoDB if channel includes in_app
   let notification: INotification | null = null;
   try {
-    notification = await Notification.create({
-      user: new mongoose.Types.ObjectId(opts.userId.toString()),
-      booking: opts.bookingId ? new mongoose.Types.ObjectId(opts.bookingId.toString()) : undefined,
-      type: opts.type,
-      title: opts.title,
-      message: opts.message,
-      read: false,
-      channel,
-      emailDeliveryStatus,
-      emailDeliveryError,
-      metadata: {
-        ...opts.metadata,
-        emailProvider: emailResult?.provider,
-      },
-    });
+    const validUserId = mongoose.Types.ObjectId.isValid(opts.userId.toString())
+      ? new mongoose.Types.ObjectId(opts.userId.toString())
+      : undefined;
+
+    if (validUserId) {
+      notification = await Notification.create({
+        user: validUserId,
+        booking: opts.bookingId && mongoose.Types.ObjectId.isValid(opts.bookingId.toString())
+          ? new mongoose.Types.ObjectId(opts.bookingId.toString())
+          : undefined,
+        type: opts.type,
+        title: opts.title,
+        message: opts.message,
+        read: false,
+        channel,
+        emailDeliveryStatus,
+        emailDeliveryError,
+        providerMessageId: emailResult?.messageId,
+        attemptCount: (channel === "email" || channel === "both") && opts.emailOptions?.recipientEmail ? 1 : 0,
+        lastAttemptAt: channel === "email" || channel === "both" ? new Date() : undefined,
+        errorSummary: emailDeliveryError,
+        metadata: {
+          ...opts.metadata,
+          emailProvider: emailResult?.provider,
+        },
+      });
+    }
   } catch (error) {
     console.error("Failed to persist in-app notification:", error);
   }
@@ -192,4 +206,138 @@ export async function sendCancellationNotification(params: {
       text: emailContent.text,
     },
   });
+}
+
+/**
+ * Helper to dispatch Booking Confirmation notification & Brevo email
+ */
+export async function sendBookingConfirmationNotification(params: {
+  userId: string | mongoose.Types.ObjectId;
+  bookingId: string | mongoose.Types.ObjectId;
+  customerName?: string;
+  customerEmail: string;
+  bookingReference: string;
+  tourName: string;
+  destination: string;
+  departureDate: string;
+  travelers: number;
+  totalPrice: number;
+  currency: string;
+  bookingStatus: string;
+  paymentStatus: string;
+  paymentDueAt?: Date;
+}): Promise<NotificationResult> {
+  const emailRes = await sendBookingConfirmationEmail({
+    toEmail: params.customerEmail,
+    customerName: params.customerName,
+    bookingReference: params.bookingReference,
+    tourName: params.tourName,
+    destination: params.destination,
+    departureDate: params.departureDate,
+    travelers: params.travelers,
+    totalPrice: params.totalPrice,
+    currency: params.currency,
+    bookingStatus: params.bookingStatus,
+    paymentStatus: params.paymentStatus,
+    paymentDueAt: params.paymentDueAt,
+  });
+
+  let notification: INotification | null = null;
+  try {
+    const validUserId = mongoose.Types.ObjectId.isValid(params.userId.toString())
+      ? new mongoose.Types.ObjectId(params.userId.toString())
+      : undefined;
+
+    if (validUserId) {
+      notification = await Notification.create({
+        user: validUserId,
+        booking: mongoose.Types.ObjectId.isValid(params.bookingId.toString())
+          ? new mongoose.Types.ObjectId(params.bookingId.toString())
+          : undefined,
+        type: "booking_confirmation",
+        title: `Reservation Confirmed: ${params.bookingReference}`,
+        message: `Your booking for "${params.tourName}" departing on ${params.departureDate} is confirmed. Total: ${params.currency} $${params.totalPrice.toLocaleString()}.`,
+        read: false,
+        channel: "both",
+        emailDeliveryStatus: emailRes.status,
+        emailDeliveryError: emailRes.error,
+        providerMessageId: emailRes.messageId,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+        metadata: {
+          bookingReference: params.bookingReference,
+          totalPrice: params.totalPrice,
+          currency: params.currency,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to persist booking confirmation notification:", err);
+  }
+
+  return { notification, emailResult: emailRes };
+}
+
+/**
+ * Helper to dispatch Verified Payment Confirmation notification & Brevo email
+ */
+export async function sendPaymentConfirmationNotification(params: {
+  userId: string | mongoose.Types.ObjectId;
+  bookingId: string | mongoose.Types.ObjectId;
+  customerName?: string;
+  customerEmail: string;
+  bookingReference: string;
+  tourName: string;
+  amountReceived: number;
+  currency: string;
+  paymentReference: string;
+  paymentMethod: string;
+  reconciledAt: Date;
+}): Promise<NotificationResult> {
+  const emailRes = await sendPaymentConfirmationEmail({
+    toEmail: params.customerEmail,
+    customerName: params.customerName,
+    bookingReference: params.bookingReference,
+    tourName: params.tourName,
+    amountReceived: params.amountReceived,
+    currency: params.currency,
+    paymentReference: params.paymentReference,
+    paymentMethod: params.paymentMethod,
+    reconciledAt: params.reconciledAt,
+  });
+
+  let notification: INotification | null = null;
+  try {
+    const validUserId = mongoose.Types.ObjectId.isValid(params.userId.toString())
+      ? new mongoose.Types.ObjectId(params.userId.toString())
+      : undefined;
+
+    if (validUserId) {
+      notification = await Notification.create({
+        user: validUserId,
+        booking: mongoose.Types.ObjectId.isValid(params.bookingId.toString())
+          ? new mongoose.Types.ObjectId(params.bookingId.toString())
+          : undefined,
+        type: "payment_confirmation",
+        title: `Payment Received: ${params.bookingReference}`,
+        message: `Your payment of ${params.currency} $${params.amountReceived.toLocaleString()} for "${params.tourName}" has been verified (Ref: ${params.paymentReference}).`,
+        read: false,
+        channel: "both",
+        emailDeliveryStatus: emailRes.status,
+        emailDeliveryError: emailRes.error,
+        providerMessageId: emailRes.messageId,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+        metadata: {
+          paymentReference: params.paymentReference,
+          amount: params.amountReceived,
+          currency: params.currency,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to persist payment confirmation notification:", err);
+  }
+
+  return { notification, emailResult: emailRes };
 }

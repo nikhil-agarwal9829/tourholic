@@ -19,6 +19,7 @@ export interface IBooking extends Document {
   paymentReconciledBy?: mongoose.Types.ObjectId;
   paymentReconciledAt?: Date;
   paymentReconciliationNotes?: string;
+  outstandingBalance?: number;
   cancelledAt?: Date;
   cancelledBy?: mongoose.Types.ObjectId;
   cancellationReason?: string;
@@ -97,6 +98,7 @@ const BookingSchema = new Schema<IBooking>(
       required: true,
       index: true,
     },
+    outstandingBalance: Number,
     paymentReference: String,
     paymentMethod: String,
     paidAt: Date,
